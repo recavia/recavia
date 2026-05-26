@@ -109,14 +109,16 @@ final class LiveSubtitleOverlayService: ObservableObject {
         let cachedSize = lastResolvedPanelSize
         let sizeChanged = cachedSize.map { !sizesMatch($0, resolvedSize) } ?? false
         let frameChanged = !framesMatch(panel.frame, nextFrame)
-        guard sizeChanged || frameChanged || cachedSize == nil else { return }
 
-        lastResolvedPanelSize = resolvedSize
-        guard sizeChanged || frameChanged else { return }
-        let shouldDisplayImmediately = sizeChanged && (
-            nextFrame.width > panel.frame.width
-                || nextFrame.height > panel.frame.height
-        )
+        if cachedSize == nil {
+            lastResolvedPanelSize = resolvedSize
+            guard frameChanged else { return }
+        } else {
+            guard sizeChanged || frameChanged else { return }
+            lastResolvedPanelSize = resolvedSize
+        }
+
+        let shouldDisplayImmediately = sizeChanged && nextFrame.isLargerThan(panel.frame)
 
         if animated {
             panel.animator().setFrame(nextFrame, display: true)
@@ -261,6 +263,12 @@ private enum LiveSubtitleOverlayLayout {
     static let fixedWidth: CGFloat = 960
     static let minimumHeight: CGFloat = 72
     static let anchorDefaultsKey = "liveSubtitleOverlayTopLeftAnchor"
+}
+
+private extension NSRect {
+    func isLargerThan(_ other: NSRect) -> Bool {
+        width > other.width || height > other.height
+    }
 }
 
 private final class ContentModel: ObservableObject {
