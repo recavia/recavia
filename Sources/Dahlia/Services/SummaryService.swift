@@ -129,6 +129,7 @@ enum SummaryService {
         let frontmatter = "---\n\(frontmatterFields)\n---"
 
         let summary = normalizeScreenshotEmbeds(result.summary, screenshots: screenshots)
+        let actionItems = normalizeActionItems(result.actionItems, screenshots: screenshots)
         let markdown = frontmatter + "\n\n" + summary + "\n"
         let fileName = summaryFileName(
             datePrefix: dateFormatter.string(from: createdAt),
@@ -142,7 +143,7 @@ enum SummaryService {
             title: result.title,
             summary: summary,
             tags: tags,
-            actionItems: result.actionItems
+            actionItems: actionItems
         )
     }
 
@@ -220,6 +221,16 @@ enum SummaryService {
         }
 
         return normalized
+    }
+
+    static func normalizeActionItems(_ actionItems: [SummaryActionItem], screenshots: [MeetingScreenshotRecord]) -> [SummaryActionItem] {
+        guard !actionItems.isEmpty else { return actionItems }
+
+        return actionItems.map { item in
+            let title = normalizeScreenshotEmbeds(item.title, screenshots: screenshots)
+            guard title != item.title else { return item }
+            return SummaryActionItem(title: title, assignee: item.assignee)
+        }
     }
 
     static func sanitizeDisplaySummary(_ summary: String) -> String {

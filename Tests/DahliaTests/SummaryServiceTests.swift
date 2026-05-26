@@ -94,6 +94,25 @@ struct SummaryServiceTests {
     }
 
     @Test
+    func normalizeActionItemsUsesExportedFilenameWithExtension() throws {
+        let screenshotId = try #require(UUID(uuidString: "019E61FD-B5D6-7A04-AC25-4B820FE951E6"))
+        let screenshot = MeetingScreenshotRecord(
+            id: screenshotId,
+            meetingId: UUID(),
+            capturedAt: Date(timeIntervalSince1970: 0),
+            imageData: Data(),
+            mimeType: "image/jpeg"
+        )
+        let actionItems = [
+            SummaryActionItem(title: "Review ![[\(screenshotId.uuidString)]]", assignee: "me"),
+        ]
+
+        let normalized = SummaryService.normalizeActionItems(actionItems, screenshots: [screenshot])
+
+        #expect(normalized == [SummaryActionItem(title: "Review ![[\(screenshotId.uuidString).jpeg]]", assignee: "me")])
+    }
+
+    @Test
     func defaultSummaryPromptRequiresScreenshotFilenameExtension() {
         #expect(AppSettings.defaultSummaryPrompt.contains("![[<image_filename>]]"))
         #expect(AppSettings.defaultSummaryPrompt.contains("including its file extension"))
