@@ -51,12 +51,18 @@ final class MeetingPersistenceService {
     }
 
     /// 既存のミーティングに追記する（追記モード）。
-    init(store: TranscriptStore, dbQueue: DatabaseQueue, existingMeetingId: UUID, existingSegmentIds: Set<UUID>) {
+    init(
+        store: TranscriptStore,
+        dbQueue: DatabaseQueue,
+        existingMeetingId: UUID,
+        existingSegmentIds: Set<UUID>,
+        recordingStartDate: Date = Date()
+    ) {
         self.store = store
         self.dbQueue = dbQueue
         self.meetingId = existingMeetingId
         self.persistedSegmentIds = existingSegmentIds
-        self.recordingStartDate = store.recordingStartTime ?? Date()
+        self.recordingStartDate = recordingStartDate
 
         startObserving()
     }

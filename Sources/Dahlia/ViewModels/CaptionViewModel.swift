@@ -981,12 +981,20 @@ final class CaptionViewModel: ObservableObject {
 
         pipelines.removeAll()
         let recordingStartTime = Date()
+        let appendContext: MeetingRepository.AppendRecordingContext?
         if let existingMeetingId {
+            let repo = MeetingRepository(dbQueue: dbQueue)
+            appendContext = try? repo.fetchAppendRecordingContext(forMeetingId: existingMeetingId)
             if store.recordingStartTime == nil {
-                let repo = MeetingRepository(dbQueue: dbQueue)
-                store.recordingStartTime = (try? repo.fetchMeeting(id: existingMeetingId))?.createdAt ?? recordingStartTime
+                if let firstSegmentStartTime = appendContext?.firstSegmentStartTime {
+                    store.recordingStartTime = appendContext?.meetingCreatedAt ?? firstSegmentStartTime
+                } else {
+                    store.recordingStartTime = recordingStartTime
+                    try? repo.updateMeetingCreatedAt(id: existingMeetingId, createdAt: recordingStartTime)
+                }
             }
         } else {
+            appendContext = nil
             store.recordingStartTime = recordingStartTime
         }
         persistenceService = nil
@@ -1005,13 +1013,12 @@ final class CaptionViewModel: ObservableObject {
 
             if let existingMeetingId {
                 // 追記モード: 既存セグメント ID を取得して PersistenceService に渡す
-                let repo = MeetingRepository(dbQueue: dbQueue)
-                let existingIds = (try? repo.fetchSegmentIds(forMeetingId: existingMeetingId)) ?? []
                 persistenceService = MeetingPersistenceService(
                     store: store,
                     dbQueue: dbQueue,
                     existingMeetingId: existingMeetingId,
-                    existingSegmentIds: existingIds
+                    existingSegmentIds: appendContext?.segmentIds ?? [],
+                    recordingStartDate: recordingStartTime
                 )
                 currentMeetingId = existingMeetingId
             } else {
@@ -1057,7 +1064,7 @@ final class CaptionViewModel: ObservableObject {
         let meetingId = ctx?.meetingId ?? currentMeetingId
         let projectName = ctx?.projectName ?? selectedProjectName
         let vaultURL = ctx?.vaultURL ?? currentVaultURL
-        let recordingStart = activeStore.recordingStartTime ?? Date()
+        let recordingStart = activeStore.timeBase
         let segments = activeStore.segments
         recordingContext = nil
 
@@ -1100,7 +1107,7 @@ final class CaptionViewModel: ObservableObject {
               let vaultURL = currentVaultURL else { return }
         let projectURL = currentProjectURL
         let transcriptText = store.exportForSummary()
-        let createdAt = store.recordingStartTime ?? Date()
+        let createdAt = store.timeBase
         let projectName = selectedProjectName ?? ""
         let segments = store.segments
         requestShowSummaryTab = true

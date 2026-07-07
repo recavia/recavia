@@ -618,10 +618,11 @@ struct ControlPanelView: View {
         } else {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 12)], spacing: 12) {
+                    let timeBase = screenshotTimeBase
                     ForEach(viewModel.screenshots, id: \.id) { screenshot in
                         ScreenshotThumbnailView(
                             screenshot: screenshot,
-                            timeBase: screenshotTimeBase,
+                            timeBase: timeBase,
                             viewModel: viewModel,
                             expandedScreenshot: $expandedScreenshot
                         )
@@ -640,7 +641,7 @@ struct ControlPanelView: View {
     }
 
     private var screenshotTimeBase: Date {
-        currentMeetingItem?.createdAt ?? viewModel.store.timeBase
+        viewModel.store.timeBase
     }
 
     private var displayedMeetingTitle: String? {

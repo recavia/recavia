@@ -64,6 +64,44 @@ struct MeetingPersistenceServiceTests {
     }
 
     @Test
+    func appendModeDurationUsesSessionStartDate() throws {
+        let database = try makeDatabase()
+        let meetingId = UUID.v7()
+        let createdAt = Date(timeIntervalSince1970: 1_776_384_000)
+        let sessionStartDate = Date()
+        let store = TranscriptStore()
+        store.recordingStartTime = createdAt
+
+        try database.dbQueue.write { db in
+            try MeetingRecord(
+                id: meetingId,
+                vaultId: testVault.id,
+                projectId: nil,
+                name: "Existing meeting",
+                status: .ready,
+                duration: nil,
+                createdAt: createdAt,
+                updatedAt: createdAt
+            ).insert(db)
+        }
+
+        let service = MeetingPersistenceService(
+            store: store,
+            dbQueue: database.dbQueue,
+            existingMeetingId: meetingId,
+            existingSegmentIds: [],
+            recordingStartDate: sessionStartDate
+        )
+        service.stop()
+
+        let persisted = try database.dbQueue.read { db in
+            try #require(MeetingRecord.fetchOne(db, key: meetingId))
+        }
+
+        #expect((persisted.duration ?? .greatestFiniteMagnitude) < 10)
+    }
+
+    @Test
     func newMeetingPersistsLinkedCalendarEvent() throws {
         let database = try makeDatabase()
         let store = TranscriptStore()
