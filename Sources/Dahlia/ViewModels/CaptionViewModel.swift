@@ -207,6 +207,7 @@ final class CaptionViewModel: ObservableObject {
     private var automaticScreenshotTask: Task<Void, Never>?
     private var lastSavedAutomaticScreenshotFingerprint: ScreenshotFingerprint?
     private var meetingLoadTask: Task<Void, Never>?
+    private var screenshotReloadGeneration = 0
     private var isSynchronizingSelectedLocale = false
     private let availableInputDevicesProvider: @Sendable () -> [MicrophoneDevice]
     private let defaultInputDeviceIDProvider: @Sendable () -> AudioDeviceID?
@@ -1684,6 +1685,9 @@ final class CaptionViewModel: ObservableObject {
 
     /// DB からスクリーンショット一覧を再読み込みする。
     func reloadScreenshots() {
+        screenshotReloadGeneration += 1
+        let generation = screenshotReloadGeneration
+
         guard let meetingId = currentMeetingId,
               let dbQueue = currentDbQueue else {
             screenshots = []
@@ -1694,7 +1698,9 @@ final class CaptionViewModel: ObservableObject {
                 let repo = MeetingRepository(dbQueue: dbQueue)
                 return (try? repo.fetchScreenshots(forMeetingId: meetingId)) ?? []
             }.value
-            guard let self, self.currentMeetingId == meetingId else { return }
+            guard let self,
+                  self.currentMeetingId == meetingId,
+                  self.screenshotReloadGeneration == generation else { return }
             self.screenshots = screenshots
         }
     }
