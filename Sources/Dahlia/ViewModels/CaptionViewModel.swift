@@ -1614,7 +1614,7 @@ final class CaptionViewModel: ObservableObject {
             try record.insert(db)
         }
         if shouldRefreshVisibleScreenshots {
-            reloadScreenshots()
+            appendVisibleScreenshot(record)
         }
     }
 
@@ -1689,8 +1689,24 @@ final class CaptionViewModel: ObservableObject {
             screenshots = []
             return
         }
-        let repo = MeetingRepository(dbQueue: dbQueue)
-        screenshots = (try? repo.fetchScreenshots(forMeetingId: meetingId)) ?? []
+        Task { [weak self, meetingId, dbQueue] in
+            let screenshots = await Task.detached(priority: .userInitiated) {
+                let repo = MeetingRepository(dbQueue: dbQueue)
+                return (try? repo.fetchScreenshots(forMeetingId: meetingId)) ?? []
+            }.value
+            guard let self, self.currentMeetingId == meetingId else { return }
+            self.screenshots = screenshots
+        }
+    }
+
+    private func appendVisibleScreenshot(_ screenshot: MeetingScreenshotRecord) {
+        guard currentMeetingId == screenshot.meetingId else { return }
+        if let index = screenshots.firstIndex(where: { $0.id == screenshot.id }) {
+            screenshots[index] = screenshot
+        } else {
+            let insertIndex = screenshots.firstIndex { $0.capturedAt > screenshot.capturedAt } ?? screenshots.endIndex
+            screenshots.insert(screenshot, at: insertIndex)
+        }
     }
 
     func deleteScreenshot(_ screenshot: MeetingScreenshotRecord) {

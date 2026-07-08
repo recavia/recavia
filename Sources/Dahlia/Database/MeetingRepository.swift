@@ -473,7 +473,7 @@ final class MeetingRepository {
 
     // MARK: - Screenshots
 
-    func fetchScreenshots(forMeetingId meetingId: UUID) throws -> [MeetingScreenshotRecord] {
+    nonisolated func fetchScreenshots(forMeetingId meetingId: UUID) throws -> [MeetingScreenshotRecord] {
         try dbQueue.read { db in
             try MeetingScreenshotRecord
                 .filter(Column("meetingId") == meetingId)

@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import SwiftUI
 
 private extension View {
@@ -122,16 +123,17 @@ private struct ScreenshotThumbnailView: View {
     let timestamp: String
     let viewModel: CaptionViewModel
     @Binding var expandedScreenshot: MeetingScreenshotRecord?
+    @State private var thumbnailImage: CGImage?
 
     var body: some View {
         VStack(spacing: 4) {
-            if let nsImage = NSImage(data: screenshot.imageData) {
+            if let thumbnailImage {
                 Button {
                     withAnimation(.easeOut(duration: 0.15)) {
                         expandedScreenshot = screenshot
                     }
                 } label: {
-                    Image(nsImage: nsImage)
+                    Image(decorative: thumbnailImage, scale: 1)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -140,6 +142,11 @@ private struct ScreenshotThumbnailView: View {
                 .buttonStyle(.plain)
                 .pointerStyle(.link)
                 .accessibilityLabel(L10n.open)
+            } else {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.primary.opacity(0.05))
+                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .accessibilityHidden(true)
             }
             HStack {
                 Text(timestamp)
@@ -157,6 +164,25 @@ private struct ScreenshotThumbnailView: View {
         }
         .padding(6)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8))
+        .task(id: screenshot.id) {
+            thumbnailImage = nil
+            thumbnailImage = await Self.makeThumbnail(from: screenshot.imageData)
+        }
+    }
+
+    private nonisolated static func makeThumbnail(from data: Data) async -> CGImage? {
+        await Task.detached(priority: .userInitiated) {
+            let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+            guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else { return nil }
+
+            let thumbnailOptions = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceThumbnailMaxPixelSize: 600,
+            ] as CFDictionary
+            return CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions)
+        }.value
     }
 }
 
