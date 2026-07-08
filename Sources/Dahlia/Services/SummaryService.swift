@@ -45,7 +45,11 @@ enum SummaryService {
         Your response MUST be a JSON object with exactly four keys:
         - "title": a concise title for this meeting/transcript (one line, no quotes)
         - "summary": the full summary in Markdown format
-        - "tags": an array of relevant short tags for categorization (empty array if none)
+        - "tags": an array of relevant short Obsidian-compatible tags for categorization (empty array if none)
+          - Tags MUST contain no spaces.
+          - Tags MUST use only letters, numbers, "_" and "-".
+          - Use "_" or "-" to join words instead of spaces or punctuation.
+          - Do not include "#", slashes, emojis, quotes, brackets, commas, or other symbols.
         - "action_items": an array of objects with exactly two keys:
           - "title": the concrete action item
           - "assignee": who owns it, or an empty string if unclear
@@ -198,6 +202,9 @@ enum SummaryService {
     private static let obsidianLinkRegex = try! NSRegularExpression(
         pattern: #"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]"#
     )
+
+    private static let tagAllowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_-"))
+    private static let tagTrimCharacters = CharacterSet(charactersIn: "_-")
 
     static func normalizeScreenshotEmbeds(_ summary: String, screenshots: [MeetingScreenshotRecord]) -> String {
         guard !screenshots.isEmpty else { return summary }
@@ -371,9 +378,27 @@ enum SummaryService {
 
     private static func appendUniqueTags(_ candidates: [String], to tags: inout [String]) {
         for candidate in candidates {
-            let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty, !tags.contains(trimmed) else { continue }
-            tags.append(trimmed)
+            guard let tag = normalizedTag(candidate), !tags.contains(tag) else { continue }
+            tags.append(tag)
         }
+    }
+
+    private static func normalizedTag(_ candidate: String) -> String? {
+        var normalized = ""
+        var lastWasSeparator = false
+
+        for scalar in candidate.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars {
+            if tagAllowedCharacters.contains(scalar) {
+                normalized.unicodeScalars.append(scalar)
+                lastWasSeparator = false
+            } else if !lastWasSeparator {
+                normalized.append("_")
+                lastWasSeparator = true
+            }
+        }
+
+        let tag = normalized.trimmingCharacters(in: tagTrimCharacters)
+        guard tag.contains(where: { $0.isLetter || $0.isNumber }) else { return nil }
+        return tag
     }
 }
