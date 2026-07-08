@@ -238,6 +238,45 @@ struct SummaryServiceTests {
     }
 
     @Test
+    func resolvedTagsNormalizesObsidianIncompatibleTags() {
+        let context = """
+        ---
+        tags:
+          - context tag
+          - "Q&A"
+          - customer-meeting
+          - 2026
+        ---
+        """
+
+        let tags = SummaryService.resolvedTags(
+            resultTags: [
+                "customer meeting",
+                "customer_meeting",
+                "sales/enterprise",
+                "risk:high",
+                "team-check_in",
+                "2026",
+                "#123",
+                "2026-q1",
+                "!!!",
+            ],
+            contextContent: context,
+        )
+
+        #expect(tags == [
+            "customer_meeting",
+            "sales_enterprise",
+            "risk_high",
+            "team-check_in",
+            "2026-q1",
+            "context_tag",
+            "Q_A",
+            "customer-meeting",
+        ])
+    }
+
+    @Test
     func resolvedSummaryPromptUsesDefaultWhenAutoSelected() {
         let previousInstructionID = AppSettings.shared.selectedInstructionID
         let previousVault = AppSettings.shared.currentVault
