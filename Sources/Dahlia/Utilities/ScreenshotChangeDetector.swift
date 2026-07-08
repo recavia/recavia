@@ -11,7 +11,7 @@ enum ScreenshotChangeDetector {
     private static let fingerprintWidth = 64
     private static let fingerprintHeight = 36
     private static let defaultChangedPixelRatioThreshold = 0.20
-    private static let changedPixelThreshold = 24
+    private static let minimumChangedPixelDifference = 8
 
     static func fingerprint(for image: CGImage) -> ScreenshotFingerprint? {
         let width = fingerprintWidth
@@ -60,7 +60,7 @@ enum ScreenshotChangeDetector {
 
         for index in lhs.pixels.indices {
             let difference = abs(Int(lhs.pixels[index]) - Int(rhs.pixels[index]))
-            if difference >= changedPixelThreshold {
+            if difference >= minimumChangedPixelDifference {
                 changedPixelCount += 1
             }
         }
