@@ -16,6 +16,7 @@ struct SummaryDocumentResponse: Decodable {
         let level: Int
         let text: String
         let items: [ItemDTO]
+        let transcriptRefs: [TranscriptReferenceDTO]
         let language: String
         let imageId: String
 
@@ -24,6 +25,7 @@ struct SummaryDocumentResponse: Decodable {
             case level
             case text
             case items
+            case transcriptRefs = "transcript_refs"
             case language
             case imageId = "image_id"
         }
@@ -34,6 +36,11 @@ struct SummaryDocumentResponse: Decodable {
         let checked: Bool
     }
 
+    struct TranscriptReferenceDTO: Decodable {
+        let time: String
+        let label: String
+    }
+
     static let responseFormat: LLMService.ResponseFormat = {
         let checklistItemSchema: [String: Any] = [
             "type": "object",
@@ -42,6 +49,15 @@ struct SummaryDocumentResponse: Decodable {
                 "checked": ["type": "boolean"],
             ],
             "required": ["text", "checked"],
+            "additionalProperties": false,
+        ]
+        let transcriptReferenceSchema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "time": ["type": "string"],
+                "label": ["type": "string"],
+            ],
+            "required": ["time", "label"],
             "additionalProperties": false,
         ]
         let blockSchema: [String: Any] = [
@@ -66,10 +82,14 @@ struct SummaryDocumentResponse: Decodable {
                     "type": "array",
                     "items": checklistItemSchema,
                 ],
+                "transcript_refs": [
+                    "type": "array",
+                    "items": transcriptReferenceSchema,
+                ],
                 "language": ["type": "string"],
                 "image_id": ["type": "string"],
             ],
-            "required": ["type", "level", "text", "items", "language", "image_id"],
+            "required": ["type", "level", "text", "items", "transcript_refs", "language", "image_id"],
             "additionalProperties": false,
         ]
         let actionItemSchema: [String: Any] = [

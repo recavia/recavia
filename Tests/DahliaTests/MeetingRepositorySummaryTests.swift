@@ -70,7 +70,12 @@ import GRDB
 
             #expect(document.title == "Legacy")
             #expect(document.sections.first?.heading == "Summary")
-            #expect(document.sections.first?.blocks == [.bulletedList(items: ["Decide [00:10:00](transcript://00:10:00)"])])
+            #expect(document.sections.first?.blocks == [
+                .bulletedList(
+                    items: ["Decide"],
+                    transcriptRefs: [TranscriptReference(time: "00:10:00", label: "00:10:00")]
+                ),
+            ])
         }
 
         private func makeRepositoryContext() throws -> RepositoryContext {

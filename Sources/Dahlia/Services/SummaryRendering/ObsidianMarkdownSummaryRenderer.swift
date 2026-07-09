@@ -65,21 +65,22 @@ enum ObsidianMarkdownSummaryRenderer {
     }
 
     private static func renderBlock(_ block: SummaryBlock, context: SummaryRenderContext) -> String? {
-        switch block {
+        let rendered: String?
+        switch block.content {
         case let .paragraph(text):
-            return renderInlineMarkdown(text, meetingId: context.meetingId).nilIfBlank
+            rendered = renderInlineMarkdown(text, meetingId: context.meetingId).nilIfBlank
         case let .bulletedList(items):
-            return items
+            rendered = items
                 .map { "- \(renderInlineMarkdown($0, meetingId: context.meetingId))" }
                 .joined(separator: "\n")
                 .nilIfBlank
         case let .numberedList(items):
-            return items.enumerated()
+            rendered = items.enumerated()
                 .map { "\($0.offset + 1). \(renderInlineMarkdown($0.element, meetingId: context.meetingId))" }
                 .joined(separator: "\n")
                 .nilIfBlank
         case let .checklist(items):
-            return items
+            rendered = items
                 .map { "- [\($0.checked ? "x" : " ")] \(renderInlineMarkdown($0.text, meetingId: context.meetingId))" }
                 .joined(separator: "\n")
                 .nilIfBlank
@@ -88,24 +89,41 @@ enum ObsidianMarkdownSummaryRenderer {
                 .components(separatedBy: .newlines)
                 .map { "> \($0)" }
                 .joined(separator: "\n")
-            return quoted.nilIfBlank
+            rendered = quoted.nilIfBlank
         case let .code(language, code):
-            return "```\(language)\n\(code)\n```"
+            rendered = "```\(language)\n\(code)\n```"
         case let .image(screenshotId, _):
-            return "![[\(screenshotFilename(for: screenshotId, context: context))]]"
+            rendered = "![[\(screenshotFilename(for: screenshotId, context: context))]]"
         case let .heading(level, text):
             let clampedLevel = max(3, min(level, 6))
-            return "\(String(repeating: "#", count: clampedLevel)) \(renderInlineMarkdown(text, meetingId: context.meetingId))"
+            rendered = "\(String(repeating: "#", count: clampedLevel)) \(renderInlineMarkdown(text, meetingId: context.meetingId))"
         case let .table(headers, rows):
-            guard !headers.isEmpty else { return nil }
-            let header = "| " + headers.map { renderInlineMarkdown($0, meetingId: context.meetingId) }.joined(separator: " | ") + " |"
-            let separator = "| " + headers.map { _ in "---" }.joined(separator: " | ") + " |"
-            let rowLines = rows.map { row in
-                let cells = row.map { renderInlineMarkdown($0, meetingId: context.meetingId) }
-                return "| " + cells.joined(separator: " | ") + " |"
+            if headers.isEmpty {
+                rendered = nil
+            } else {
+                let header = "| " + headers.map { renderInlineMarkdown($0, meetingId: context.meetingId) }.joined(separator: " | ") + " |"
+                let separator = "| " + headers.map { _ in "---" }.joined(separator: " | ") + " |"
+                let rowLines = rows.map { row in
+                    let cells = row.map { renderInlineMarkdown($0, meetingId: context.meetingId) }
+                    return "| " + cells.joined(separator: " | ") + " |"
+                }
+                rendered = ([header, separator] + rowLines).joined(separator: "\n")
             }
-            return ([header, separator] + rowLines).joined(separator: "\n")
         }
+
+        guard let rendered else { return nil }
+        return appendReferences(to: rendered, refs: block.transcriptRefs, meetingId: context.meetingId)
+    }
+
+    private static func appendReferences(to text: String, refs: [TranscriptReference], meetingId: UUID) -> String {
+        guard !refs.isEmpty else { return text }
+        let referenceText = refs
+            .map { ref in
+                let label = ref.label.nilIfBlank ?? ref.time
+                return "[[\(meetingId.uuidString)#\(ref.time)|\(label)]]"
+            }
+            .joined(separator: ", ")
+        return "\(text) (\(referenceText))"
     }
 
     private static func renderInlineMarkdown(_ text: String, meetingId: UUID) -> String {

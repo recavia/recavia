@@ -29,70 +29,73 @@ struct SummaryDocumentView: View {
         }
     }
 
-    @ViewBuilder
     private func blockView(_ block: SummaryBlock) -> some View {
-        switch block {
-        case let .paragraph(text):
-            inlineMarkdownText(text)
-                .font(.body)
-        case let .bulletedList(items):
-            VStack(alignment: .leading, spacing: 3) {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("•")
-                        inlineMarkdownText(item)
-                    }
-                    .font(.body)
-                }
-            }
-            .padding(.leading, 8)
-        case let .numberedList(items):
-            VStack(alignment: .leading, spacing: 3) {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("\(index + 1).")
-                            .monospacedDigit()
-                        inlineMarkdownText(item)
-                    }
-                    .font(.body)
-                }
-            }
-            .padding(.leading, 8)
-        case let .checklist(items):
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Image(systemName: item.checked ? "checkmark.square" : "square")
-                            .foregroundStyle(item.checked ? .secondary : .tertiary)
-                        inlineMarkdownText(item.text)
-                    }
-                    .font(.body)
-                }
-            }
-            .padding(.leading, 8)
-        case let .quote(text):
-            HStack(spacing: 0) {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(Color.secondary.opacity(0.4))
-                    .frame(width: 3)
+        VStack(alignment: .leading, spacing: 4) {
+            switch block.content {
+            case let .paragraph(text):
                 inlineMarkdownText(text)
                     .font(.body)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 8)
+            case let .bulletedList(items):
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text("•")
+                            inlineMarkdownText(item)
+                        }
+                        .font(.body)
+                    }
+                }
+                .padding(.leading, 8)
+            case let .numberedList(items):
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text("\(index + 1).")
+                                .monospacedDigit()
+                            inlineMarkdownText(item)
+                        }
+                        .font(.body)
+                    }
+                }
+                .padding(.leading, 8)
+            case let .checklist(items):
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Image(systemName: item.checked ? "checkmark.square" : "square")
+                                .foregroundStyle(item.checked ? .secondary : .tertiary)
+                            inlineMarkdownText(item.text)
+                        }
+                        .font(.body)
+                    }
+                }
+                .padding(.leading, 8)
+            case let .quote(text):
+                HStack(spacing: 0) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.secondary.opacity(0.4))
+                        .frame(width: 3)
+                    inlineMarkdownText(text)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 8)
+                }
+                .padding(.vertical, 2)
+            case let .code(_, code):
+                Text(code)
+                    .font(.system(.callout, design: .monospaced))
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+            case let .image(screenshotId, caption):
+                imageView(screenshotId: screenshotId, caption: caption)
+            case let .heading(level, text):
+                headingView(level: level, text: text)
+            case let .table(headers, rows):
+                tableView(headers: headers, rows: rows)
             }
-            .padding(.vertical, 2)
-        case let .code(_, code):
-            Text(code)
-                .font(.system(.callout, design: .monospaced))
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
-        case let .image(screenshotId, caption):
-            imageView(screenshotId: screenshotId, caption: caption)
-        case let .heading(level, text):
-            headingView(level: level, text: text)
-        case let .table(headers, rows):
-            tableView(headers: headers, rows: rows)
+
+            transcriptReferencesView(block.transcriptRefs)
         }
     }
 
@@ -176,29 +179,22 @@ struct SummaryDocumentView: View {
 
     @ViewBuilder
     private func inlineMarkdownText(_ text: String) -> some View {
-        let displayText = Self.textByRemovingTranscriptLinks(text)
         if let attributed = try? AttributedString(
-            markdown: displayText,
+            markdown: text,
             options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         ) {
             Text(attributed)
         } else {
-            Text(displayText)
+            Text(text)
         }
     }
 
-    private static func textByRemovingTranscriptLinks(_ text: String) -> String {
-        let pattern = #"\[([^\]]+)\]\(transcript://[0-9]{2}:[0-9]{2}:[0-9]{2}\)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
-        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
-        guard !matches.isEmpty else { return text }
-
-        var stripped = text
-        for match in matches.reversed() {
-            guard let fullRange = Range(match.range(at: 0), in: stripped),
-                  let labelRange = Range(match.range(at: 1), in: stripped) else { continue }
-            stripped.replaceSubrange(fullRange, with: String(stripped[labelRange]))
+    @ViewBuilder
+    private func transcriptReferencesView(_ refs: [TranscriptReference]) -> some View {
+        if !refs.isEmpty {
+            Text(refs.map(\.time).joined(separator: "  "))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
-        return stripped
     }
 }

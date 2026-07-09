@@ -399,13 +399,15 @@ final class AppSettings: ObservableObject {
 
     <citation_policy>
     - Support important claims with transcript references when possible.
-    - Add transcript links inline for key decisions, action items, risks, dates, and open questions.
+    - Add transcript references to each relevant block's `transcript_refs` for key decisions, action items, risks, dates, and open questions.
     - Do not over-cite to the point that readability suffers.
     </citation_policy>
 
     <rendering_rules>
     <transcript_links>
-    - When referencing the transcript inside a text field, use `[HH:MM:SS](transcript://HH:MM:SS)`.
+    - Do not put transcript links inside text fields.
+    - When referencing the transcript, add an object to the block's `transcript_refs` array.
+    - Each transcript reference must use `{"time":"HH:MM:SS","label":"short label"}`.
     - Use the most relevant timestamp for the referenced point.
     </transcript_links>
     <screenshot_embeds>

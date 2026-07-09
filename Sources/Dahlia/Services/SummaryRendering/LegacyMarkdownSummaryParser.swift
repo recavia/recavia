@@ -48,26 +48,35 @@ enum LegacyMarkdownSummaryParser {
 
             if let match = trimmed.firstMatch(of: /^(#{1,6})\s+(.+)$/) {
                 let level = match.1.count
-                let text = normalizeInlineMarkdown(String(match.2))
+                let normalized = normalizedTextAndRefs(String(match.2))
                 if level <= 2 {
                     finishCurrentSection()
-                    currentSection.heading = text
+                    currentSection.heading = normalized.text
                 } else {
-                    currentSection.blocks.append(.heading(level: level, text: text))
+                    currentSection.blocks.append(.heading(level: level, text: normalized.text, transcriptRefs: normalized.refs))
                 }
                 i += 1
                 continue
             }
 
             if isTableStart(lines: lines, index: i) {
-                let headers = parsePipeRow(trimmed).map(normalizeInlineMarkdown)
+                var tableRefs: [TranscriptReference] = []
+                let headers = parsePipeRow(trimmed).map { text in
+                    let normalized = normalizedTextAndRefs(text)
+                    tableRefs.append(contentsOf: normalized.refs)
+                    return normalized.text
+                }
                 i += 2
                 var rows: [[String]] = []
                 while i < lines.count, lines[i].trimmingCharacters(in: .whitespaces).contains("|") {
-                    rows.append(parsePipeRow(lines[i]).map(normalizeInlineMarkdown))
+                    rows.append(parsePipeRow(lines[i]).map { text in
+                        let normalized = normalizedTextAndRefs(text)
+                        tableRefs.append(contentsOf: normalized.refs)
+                        return normalized.text
+                    })
                     i += 1
                 }
-                currentSection.blocks.append(.table(headers: headers, rows: rows))
+                currentSection.blocks.append(.table(headers: headers, rows: rows, transcriptRefs: tableRefs))
                 continue
             }
 
@@ -79,45 +88,61 @@ enum LegacyMarkdownSummaryParser {
                     quoteLines.append(content)
                     i += 1
                 }
-                currentSection.blocks.append(.quote(normalizeInlineMarkdown(quoteLines.joined(separator: " "))))
+                let normalized = normalizedTextAndRefs(quoteLines.joined(separator: " "))
+                currentSection.blocks.append(.quote(normalized.text, transcriptRefs: normalized.refs))
                 continue
             }
 
             if let checklistMatch = checklistItem(in: trimmed) {
                 var items: [SummaryBlock.ChecklistItem] = []
-                items.append(.init(text: normalizeInlineMarkdown(checklistMatch.text), checked: checklistMatch.checked))
+                var refs: [TranscriptReference] = []
+                let first = normalizedTextAndRefs(checklistMatch.text)
+                refs.append(contentsOf: first.refs)
+                items.append(.init(text: first.text, checked: checklistMatch.checked))
                 i += 1
                 while i < lines.count,
                       let next = checklistItem(in: lines[i].trimmingCharacters(in: .whitespaces)) {
-                    items.append(.init(text: normalizeInlineMarkdown(next.text), checked: next.checked))
+                    let normalized = normalizedTextAndRefs(next.text)
+                    refs.append(contentsOf: normalized.refs)
+                    items.append(.init(text: normalized.text, checked: next.checked))
                     i += 1
                 }
-                currentSection.blocks.append(.checklist(items: items))
+                currentSection.blocks.append(.checklist(items: items, transcriptRefs: refs))
                 continue
             }
 
             if let item = unorderedListItem(in: trimmed) {
-                var items = [normalizeInlineMarkdown(item)]
+                var refs: [TranscriptReference] = []
+                let first = normalizedTextAndRefs(item)
+                refs.append(contentsOf: first.refs)
+                var items = [first.text]
                 i += 1
                 while i < lines.count,
                       let next = unorderedListItem(in: lines[i].trimmingCharacters(in: .whitespaces)),
                       checklistItem(in: lines[i].trimmingCharacters(in: .whitespaces)) == nil {
-                    items.append(normalizeInlineMarkdown(next))
+                    let normalized = normalizedTextAndRefs(next)
+                    refs.append(contentsOf: normalized.refs)
+                    items.append(normalized.text)
                     i += 1
                 }
-                currentSection.blocks.append(.bulletedList(items: items))
+                currentSection.blocks.append(.bulletedList(items: items, transcriptRefs: refs))
                 continue
             }
 
             if let item = orderedListItem(in: trimmed) {
-                var items = [normalizeInlineMarkdown(item)]
+                var refs: [TranscriptReference] = []
+                let first = normalizedTextAndRefs(item)
+                refs.append(contentsOf: first.refs)
+                var items = [first.text]
                 i += 1
                 while i < lines.count,
                       let next = orderedListItem(in: lines[i].trimmingCharacters(in: .whitespaces)) {
-                    items.append(normalizeInlineMarkdown(next))
+                    let normalized = normalizedTextAndRefs(next)
+                    refs.append(contentsOf: normalized.refs)
+                    items.append(normalized.text)
                     i += 1
                 }
-                currentSection.blocks.append(.numberedList(items: items))
+                currentSection.blocks.append(.numberedList(items: items, transcriptRefs: refs))
                 continue
             }
 
@@ -160,9 +185,10 @@ enum LegacyMarkdownSummaryParser {
             } else {
                 ""
             }
+            let normalizedCaption = normalizedTextAndRefs(caption)
             if let screenshotId = resolvedScreenshotId(for: target, context: context) {
-                blocks.append(.image(screenshotId: screenshotId, caption: caption))
-            } else if !caption.isEmpty {
+                blocks.append(.image(screenshotId: screenshotId, caption: normalizedCaption.text, transcriptRefs: normalizedCaption.refs))
+            } else if !normalizedCaption.text.isEmpty {
                 appendParagraph(caption, to: &blocks)
             }
 
@@ -174,9 +200,43 @@ enum LegacyMarkdownSummaryParser {
     }
 
     static func normalizeInlineMarkdown(_ text: String) -> String {
-        let matches = obsidianLinkRegex.matches(in: text, range: NSRange(text.startIndex..., in: text))
-        guard !matches.isEmpty else { return text }
+        normalizedTextAndRefs(text).text
+    }
 
+    static func normalizedTextAndRefs(_ text: String) -> (text: String, refs: [TranscriptReference]) {
+        let markdownResult = replaceTranscriptMarkdownLinks(in: text)
+        let obsidianResult = replaceObsidianLinks(in: markdownResult.text)
+        return (
+            text: cleanupReferenceWhitespace(obsidianResult.text),
+            refs: uniqueReferences(markdownResult.refs + obsidianResult.refs)
+        )
+    }
+
+    private static func replaceTranscriptMarkdownLinks(in text: String) -> (text: String, refs: [TranscriptReference]) {
+        let matches = transcriptMarkdownLinkRegex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        guard !matches.isEmpty else { return (text, []) }
+
+        var refs: [TranscriptReference] = []
+        var normalized = text
+        for match in matches.reversed() {
+            guard let fullRange = Range(match.range(at: 0), in: normalized),
+                  let labelRange = Range(match.range(at: 1), in: normalized),
+                  let timeRange = Range(match.range(at: 2), in: normalized) else { continue }
+
+            let label = String(normalized[labelRange])
+            let time = String(normalized[timeRange])
+            refs.append(TranscriptReference(time: time, label: label))
+            normalized.replaceSubrange(fullRange, with: label == time ? "" : label)
+        }
+
+        return (normalized, Array(refs.reversed()))
+    }
+
+    private static func replaceObsidianLinks(in text: String) -> (text: String, refs: [TranscriptReference]) {
+        let matches = obsidianLinkRegex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        guard !matches.isEmpty else { return (text, []) }
+
+        var refs: [TranscriptReference] = []
         var normalized = text
         for match in matches.reversed() {
             guard let fullRange = Range(match.range(at: 0), in: normalized),
@@ -184,15 +244,27 @@ enum LegacyMarkdownSummaryParser {
 
             let target = String(normalized[targetRange])
             let alias = Range(match.range(at: 2), in: normalized).map { String(normalized[$0]) }
-            let replacement = transcriptMarkdownLink(for: target, alias: alias)
+            let parsed = transcriptReference(for: target, alias: alias)
+            if let ref = parsed.ref {
+                refs.append(ref)
+            }
+            let replacement = if let ref = parsed.ref, parsed.replacement == ref.time {
+                ""
+            } else {
+                parsed.replacement
+            }
             normalized.replaceSubrange(fullRange, with: replacement)
         }
 
-        return normalized
+        return (normalized, Array(refs.reversed()))
     }
 
     private static let obsidianImageEmbedRegex = try! NSRegularExpression(
         pattern: #"\!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]"#
+    )
+
+    private static let transcriptMarkdownLinkRegex = try! NSRegularExpression(
+        pattern: #"\[([^\]]+)\]\(transcript://([0-9]{2}:[0-9]{2}:[0-9]{2})\)"#
     )
 
     private static let obsidianLinkRegex = try! NSRegularExpression(
@@ -214,9 +286,10 @@ enum LegacyMarkdownSummaryParser {
     }
 
     private static func appendParagraph(_ text: String, to blocks: inout [SummaryBlock]) {
-        let normalized = normalizeInlineMarkdown(text).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return }
-        blocks.append(.paragraph(normalized))
+        let normalized = normalizedTextAndRefs(text)
+        let paragraph = normalized.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !paragraph.isEmpty else { return }
+        blocks.append(.paragraph(paragraph, transcriptRefs: normalized.refs))
     }
 
     private static func resolvedScreenshotId(for target: String, context: SummaryRenderContext?) -> UUID? {
@@ -233,16 +306,33 @@ enum LegacyMarkdownSummaryParser {
         return id
     }
 
-    private static func transcriptMarkdownLink(for target: String, alias: String?) -> String {
+    private static func transcriptReference(for target: String, alias: String?) -> (replacement: String, ref: TranscriptReference?) {
         guard let hashIndex = target.lastIndex(of: "#") else {
-            return alias ?? ""
+            return (alias ?? "", nil)
         }
         let timestamp = String(target[target.index(after: hashIndex)...])
         guard timestamp.firstMatch(of: /^\d{2}:\d{2}:\d{2}$/) != nil else {
-            return alias ?? ""
+            return (alias ?? "", nil)
         }
         let label = alias?.nilIfBlank ?? timestamp
-        return "[\(label)](transcript://\(timestamp))"
+        return (label, TranscriptReference(time: timestamp, label: label))
+    }
+
+    private static func cleanupReferenceWhitespace(_ text: String) -> String {
+        var cleaned = text.replacingOccurrences(of: #"\(\s*\)"#, with: "", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(of: #"\s+([,.;:!?])"#, with: "$1", options: .regularExpression)
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func uniqueReferences(_ refs: [TranscriptReference]) -> [TranscriptReference] {
+        var seen: Set<String> = []
+        return refs.filter { ref in
+            let key = "\(ref.time)\u{0}\(ref.label)"
+            guard !seen.contains(key) else { return false }
+            seen.insert(key)
+            return true
+        }
     }
 
     private static func isBlockStart(_ line: String, lines: [String], index: Int) -> Bool {

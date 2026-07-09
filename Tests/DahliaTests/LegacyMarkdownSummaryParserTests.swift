@@ -45,7 +45,10 @@ import Foundation
             #expect(document.sections.count == 2)
             #expect(document.sections[0].heading == "Summary")
             #expect(document.sections[0].blocks == [
-                .paragraph("Decide to ship ([00:10:00](transcript://00:10:00)) and see"),
+                .paragraph(
+                    "Decide to ship and see",
+                    transcriptRefs: [TranscriptReference(time: "00:10:00", label: "00:10:00")]
+                ),
                 .image(screenshotId: screenshotId, caption: "Screen"),
                 .checklist(items: [
                     .init(text: "Send notes", checked: true),

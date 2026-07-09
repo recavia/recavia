@@ -16,7 +16,10 @@ import Foundation
                         id: sectionId,
                         heading: "Decisions",
                         blocks: [
-                            .paragraph("Ship [00:10:00](transcript://00:10:00)"),
+                            .paragraph(
+                                "Ship",
+                                transcriptRefs: [TranscriptReference(time: "00:10:00", label: "Decision")]
+                            ),
                             .bulletedList(items: ["One", "Two"]),
                             .numberedList(items: ["First"]),
                             .checklist(items: [.init(text: "Send notes", checked: false)]),

@@ -24,7 +24,10 @@ import Foundation
                         id: UUID.v7(),
                         heading: "Summary",
                         blocks: [
-                            .paragraph("Decision [00:10:00](transcript://00:10:00)"),
+                            .paragraph(
+                                "Decision",
+                                transcriptRefs: [TranscriptReference(time: "00:10:00", label: "Decision")]
+                            ),
                             .image(screenshotId: screenshotId, caption: "Screen"),
                         ]
                     ),
@@ -39,7 +42,7 @@ import Foundation
             #expect(rendered.markdown.contains("meeting_id: \"\(meetingId.uuidString)\""))
             #expect(rendered.markdown.contains("title: \"Weekly Sync/Review\""))
             #expect(rendered.markdown.contains("tags:\n  - team"))
-            #expect(rendered.body.contains("[[\(meetingId.uuidString)#00:10:00|00:10:00]]"))
+            #expect(rendered.body.contains("[[\(meetingId.uuidString)#00:10:00|Decision]]"))
             #expect(rendered.body.contains("![[\(screenshotId.uuidString).jpeg]]"))
         }
 

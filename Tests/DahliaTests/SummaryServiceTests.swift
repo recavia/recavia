@@ -53,7 +53,7 @@ struct SummaryServiceTests {
 
         #expect(required.contains("sections"))
         #expect(required.contains("action_items"))
-        #expect(blockRequired == ["type", "level", "text", "items", "language", "image_id"])
+        #expect(blockRequired == ["type", "level", "text", "items", "transcript_refs", "language", "image_id"])
         #expect((blockItems["additionalProperties"] as? Bool) == false)
         #expect((items["additionalProperties"] as? Bool) == false)
     }
@@ -83,8 +83,11 @@ struct SummaryServiceTests {
                 {
                   "type": "paragraph",
                   "level": 0,
-                  "text": "Ship it [00:10:00](transcript://00:10:00)",
+                  "text": "Ship it",
                   "items": [],
+                  "transcript_refs": [
+                    {"time": "00:10:00", "label": "Decision"}
+                  ],
                   "language": "",
                   "image_id": ""
                 },
@@ -93,6 +96,7 @@ struct SummaryServiceTests {
                   "level": 0,
                   "text": "Architecture",
                   "items": [],
+                  "transcript_refs": [],
                   "language": "",
                   "image_id": "\(screenshotId.uuidString)"
                 }
@@ -109,7 +113,7 @@ struct SummaryServiceTests {
         #expect(document.title == "Weekly sync")
         #expect(document.sections.first?.heading == "Decisions")
         #expect(document.sections.first?.blocks == [
-            .paragraph("Ship it [00:10:00](transcript://00:10:00)"),
+            .paragraph("Ship it", transcriptRefs: [TranscriptReference(time: "00:10:00", label: "Decision")]),
             .image(screenshotId: screenshotId, caption: "Architecture"),
         ])
     }
@@ -133,8 +137,13 @@ struct SummaryServiceTests {
         #expect(document.title == "Legacy")
         #expect(document.tags == ["team"])
         #expect(document.sections.first?.heading == "Summary")
-        #expect(document.sections.first?.blocks == [.bulletedList(items: ["Decide ([00:10:00](transcript://00:10:00))"])])
-        #expect(document.actionItems == [SummaryActionItem(title: "Follow up [00:11:00](transcript://00:11:00)", assignee: "me")])
+        #expect(document.sections.first?.blocks == [
+            .bulletedList(
+                items: ["Decide"],
+                transcriptRefs: [TranscriptReference(time: "00:10:00", label: "00:10:00")]
+            ),
+        ])
+        #expect(document.actionItems == [SummaryActionItem(title: "Follow up", assignee: "me")])
     }
 
     @Test
@@ -147,15 +156,15 @@ struct SummaryServiceTests {
             {
               "heading": "",
               "blocks": [
-                {"type": "bulleted_list", "level": 0, "text": "", "items": [], "language": "", "image_id": ""},
-                {"type": "checklist", "level": 0, "text": "", "items": [{"text": "", "checked": false}], "language": "", "image_id": ""},
-                {"type": "paragraph", "level": 0, "text": "", "items": [], "language": "", "image_id": ""}
+                {"type": "bulleted_list", "level": 0, "text": "", "items": [], "transcript_refs": [], "language": "", "image_id": ""},
+                {"type": "checklist", "level": 0, "text": "", "items": [{"text": "", "checked": false}], "transcript_refs": [], "language": "", "image_id": ""},
+                {"type": "paragraph", "level": 0, "text": "", "items": [], "transcript_refs": [], "language": "", "image_id": ""}
               ]
             },
             {
               "heading": "Notes",
               "blocks": [
-                {"type": "numbered_list", "level": 0, "text": "", "items": [], "language": "", "image_id": ""}
+                {"type": "numbered_list", "level": 0, "text": "", "items": [], "transcript_refs": [], "language": "", "image_id": ""}
               ]
             }
           ],
@@ -222,7 +231,7 @@ struct SummaryServiceTests {
     @Test
     func defaultSummaryPromptRequiresStructuredImageBlocks() {
         #expect(AppSettings.defaultSummaryPrompt.contains("create an `image` block"))
-        #expect(AppSettings.defaultSummaryPrompt.contains("[HH:MM:SS](transcript://HH:MM:SS)"))
+        #expect(AppSettings.defaultSummaryPrompt.contains("transcript_refs"))
     }
 
     @Test

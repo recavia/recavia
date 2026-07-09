@@ -34,7 +34,66 @@ struct SummarySection: Codable, Equatable, Identifiable {
     var blocks: [SummaryBlock]
 }
 
-enum SummaryBlock: Equatable {
+struct TranscriptReference: Codable, Equatable {
+    var time: String
+    var label: String
+}
+
+struct SummaryBlock: Codable, Equatable, Identifiable {
+    var id: UUID
+    var transcriptRefs: [TranscriptReference]
+    var content: SummaryBlockContent
+
+    init(id: UUID = .v7(), transcriptRefs: [TranscriptReference] = [], content: SummaryBlockContent) {
+        self.id = id
+        self.transcriptRefs = transcriptRefs
+        self.content = content
+    }
+
+    typealias ChecklistItem = SummaryBlockContent.ChecklistItem
+
+    static func paragraph(_ text: String, transcriptRefs: [TranscriptReference] = []) -> SummaryBlock {
+        SummaryBlock(transcriptRefs: transcriptRefs, content: .paragraph(text))
+    }
+
+    static func bulletedList(items: [String], transcriptRefs: [TranscriptReference] = []) -> SummaryBlock {
+        SummaryBlock(transcriptRefs: transcriptRefs, content: .bulletedList(items: items))
+    }
+
+    static func numberedList(items: [String], transcriptRefs: [TranscriptReference] = []) -> SummaryBlock {
+        SummaryBlock(transcriptRefs: transcriptRefs, content: .numberedList(items: items))
+    }
+
+    static func checklist(items: [ChecklistItem], transcriptRefs: [TranscriptReference] = []) -> SummaryBlock {
+        SummaryBlock(transcriptRefs: transcriptRefs, content: .checklist(items: items))
+    }
+
+    static func quote(_ text: String, transcriptRefs: [TranscriptReference] = []) -> SummaryBlock {
+        SummaryBlock(transcriptRefs: transcriptRefs, content: .quote(text))
+    }
+
+    static func code(language: String, code: String, transcriptRefs: [TranscriptReference] = []) -> SummaryBlock {
+        SummaryBlock(transcriptRefs: transcriptRefs, content: .code(language: language, code: code))
+    }
+
+    static func image(screenshotId: UUID, caption: String, transcriptRefs: [TranscriptReference] = []) -> SummaryBlock {
+        SummaryBlock(transcriptRefs: transcriptRefs, content: .image(screenshotId: screenshotId, caption: caption))
+    }
+
+    static func heading(level: Int, text: String, transcriptRefs: [TranscriptReference] = []) -> SummaryBlock {
+        SummaryBlock(transcriptRefs: transcriptRefs, content: .heading(level: level, text: text))
+    }
+
+    static func table(headers: [String], rows: [[String]], transcriptRefs: [TranscriptReference] = []) -> SummaryBlock {
+        SummaryBlock(transcriptRefs: transcriptRefs, content: .table(headers: headers, rows: rows))
+    }
+
+    static func == (lhs: SummaryBlock, rhs: SummaryBlock) -> Bool {
+        lhs.transcriptRefs == rhs.transcriptRefs && lhs.content == rhs.content
+    }
+}
+
+enum SummaryBlockContent: Equatable {
     case paragraph(String)
     case bulletedList(items: [String])
     case numberedList(items: [String])
@@ -51,7 +110,7 @@ enum SummaryBlock: Equatable {
     }
 }
 
-extension SummaryBlock: Codable {
+extension SummaryBlockContent: Codable {
     private enum CodingKeys: String, CodingKey {
         case type
         case text
@@ -157,5 +216,26 @@ extension SummaryBlock: Codable {
             try container.encode(headers, forKey: .headers)
             try container.encode(rows, forKey: .rows)
         }
+    }
+}
+
+extension SummaryBlock {
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case transcriptRefs = "transcript_refs"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? container.decode(UUID.self, forKey: .id)) ?? .v7()
+        transcriptRefs = (try? container.decode([TranscriptReference].self, forKey: .transcriptRefs)) ?? []
+        content = try SummaryBlockContent(from: decoder)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(transcriptRefs, forKey: .transcriptRefs)
+        try content.encode(to: encoder)
     }
 }
