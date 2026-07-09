@@ -92,8 +92,12 @@ enum ObsidianMarkdownSummaryRenderer {
             rendered = quoted.nilIfBlank
         case let .code(language, code):
             rendered = "```\(language)\n\(code)\n```"
-        case let .image(screenshotId, _):
-            rendered = "![[\(screenshotFilename(for: screenshotId, context: context))]]"
+        case let .image(screenshotId, caption):
+            let image = "![[\(screenshotFilename(for: screenshotId, context: context))]]"
+            guard let caption = renderInlineMarkdown(caption, meetingId: context.meetingId).nilIfBlank else {
+                return image
+            }
+            return "\(image)\n\n\(caption)"
         case let .heading(level, text):
             let clampedLevel = max(3, min(level, 6))
             rendered = "\(String(repeating: "#", count: clampedLevel)) \(renderInlineMarkdown(text, meetingId: context.meetingId))"
@@ -117,10 +121,9 @@ enum ObsidianMarkdownSummaryRenderer {
 
     private static func appendReferences(to text: String, refs: [TranscriptReference], meetingId: UUID) -> String {
         guard !refs.isEmpty else { return text }
-        let referenceText = refs
-            .map { ref in
-                let label = ref.label.nilIfBlank ?? ref.time
-                return "[[\(meetingId.uuidString)#\(ref.time)|\(label)]]"
+        let referenceText: String = refs
+            .map { ref -> String in
+                "[[" + meetingId.uuidString + "#" + ref.time + "|" + ref.time + "]]"
             }
             .joined(separator: ", ")
         return "\(text) (\(referenceText))"
@@ -134,11 +137,9 @@ enum ObsidianMarkdownSummaryRenderer {
         let matches = regex.matches(in: rendered, range: NSRange(rendered.startIndex..., in: rendered))
         for match in matches.reversed() {
             guard let fullRange = Range(match.range(at: 0), in: rendered),
-                  let labelRange = Range(match.range(at: 1), in: rendered),
                   let timeRange = Range(match.range(at: 2), in: rendered) else { continue }
-            let label = String(rendered[labelRange])
             let time = String(rendered[timeRange])
-            rendered.replaceSubrange(fullRange, with: "[[\(meetingId.uuidString)#\(time)|\(label)]]")
+            rendered.replaceSubrange(fullRange, with: "[[" + meetingId.uuidString + "#" + time + "|" + time + "]]")
         }
         return rendered
     }

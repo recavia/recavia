@@ -4,11 +4,16 @@ import SwiftUI
 struct SummaryDocumentView: View {
     let document: SummaryDocument
     let imageProvider: (UUID) -> NSImage?
-    @State private var imageCache: [UUID: NSImage] = [:]
-    @State private var attemptedImageLoads: Set<UUID> = []
 
     var body: some View {
-        LazyVStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            if !document.title.isEmpty {
+                inlineMarkdownText(document.title)
+                    .font(.title2.bold())
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 2)
+            }
+
             ForEach(document.sections) { section in
                 sectionView(section)
             }
@@ -21,10 +26,11 @@ struct SummaryDocumentView: View {
         if !section.heading.isEmpty {
             inlineMarkdownText(section.heading)
                 .font(.title3.bold())
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 4)
         }
 
-        ForEach(Array(section.blocks.enumerated()), id: \.offset) { _, block in
+        ForEach(section.blocks) { block in
             blockView(block)
         }
     }
@@ -35,12 +41,16 @@ struct SummaryDocumentView: View {
             case let .paragraph(text):
                 inlineMarkdownText(text)
                     .font(.body)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
             case let .bulletedList(items):
                 VStack(alignment: .leading, spacing: 3) {
                     ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text("•")
                             inlineMarkdownText(item)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .font(.body)
                     }
@@ -53,6 +63,8 @@ struct SummaryDocumentView: View {
                             Text("\(index + 1).")
                                 .monospacedDigit()
                             inlineMarkdownText(item)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .font(.body)
                     }
@@ -65,6 +77,8 @@ struct SummaryDocumentView: View {
                             Image(systemName: item.checked ? "checkmark.square" : "square")
                                 .foregroundStyle(item.checked ? .secondary : .tertiary)
                             inlineMarkdownText(item.text)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .font(.body)
                     }
@@ -78,6 +92,8 @@ struct SummaryDocumentView: View {
                     inlineMarkdownText(text)
                         .font(.body)
                         .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.leading, 8)
                 }
                 .padding(.vertical, 2)
@@ -94,8 +110,6 @@ struct SummaryDocumentView: View {
             case let .table(headers, rows):
                 tableView(headers: headers, rows: rows)
             }
-
-            transcriptReferencesView(block.transcriptRefs)
         }
     }
 
@@ -119,7 +133,7 @@ struct SummaryDocumentView: View {
 
     private func imageView(screenshotId: UUID, caption: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let image = imageCache[screenshotId] {
+            if let image = imageProvider(screenshotId) {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
@@ -132,17 +146,14 @@ struct SummaryDocumentView: View {
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
-                    .onAppear {
-                        guard !attemptedImageLoads.contains(screenshotId) else { return }
-                        attemptedImageLoads.insert(screenshotId)
-                        imageCache[screenshotId] = imageProvider(screenshotId)
-                    }
             }
 
             if !caption.isEmpty {
                 inlineMarkdownText(caption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -189,12 +200,4 @@ struct SummaryDocumentView: View {
         }
     }
 
-    @ViewBuilder
-    private func transcriptReferencesView(_ refs: [TranscriptReference]) -> some View {
-        if !refs.isEmpty {
-            Text(refs.map(\.time).joined(separator: "  "))
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-        }
-    }
 }

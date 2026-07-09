@@ -28,7 +28,11 @@ import Foundation
                                 "Decision",
                                 transcriptRefs: [TranscriptReference(time: "00:10:00", label: "Decision")]
                             ),
-                            .image(screenshotId: screenshotId, caption: "Screen"),
+                            .image(
+                                screenshotId: screenshotId,
+                                caption: "Screen",
+                                transcriptRefs: [TranscriptReference(time: "00:11:00", label: "Screen shown")]
+                            ),
                         ]
                     ),
                 ],
@@ -42,8 +46,13 @@ import Foundation
             #expect(rendered.markdown.contains("meeting_id: \"\(meetingId.uuidString)\""))
             #expect(rendered.markdown.contains("title: \"Weekly Sync/Review\""))
             #expect(rendered.markdown.contains("tags:\n  - team"))
-            #expect(rendered.body.contains("[[\(meetingId.uuidString)#00:10:00|Decision]]"))
+            #expect(rendered.body.contains("[[\(meetingId.uuidString)#00:10:00|00:10:00]]"))
+            #expect(!rendered.body.contains("[[\(meetingId.uuidString)#00:10:00|Decision]]"))
             #expect(rendered.body.contains("![[\(screenshotId.uuidString).jpeg]]"))
+            #expect(rendered.body.contains("![[\(screenshotId.uuidString).jpeg]]\n\nScreen"))
+            #expect(!rendered.body.contains("00:11:00"))
+            #expect(!rendered.body.contains("Screen shown"))
+            #expect(!rendered.body.contains("SQL(elements:"))
         }
 
         @Test
@@ -68,6 +77,7 @@ import Foundation
             let rendered = ObsidianMarkdownSummaryRenderer.render(document: document, context: context)
 
             #expect(rendered.body.contains("![[\(screenshotId.uuidString).jpeg]]"))
+            #expect(rendered.body.contains("Screen"))
             #expect(!rendered.body.contains(".webp"))
         }
     }
