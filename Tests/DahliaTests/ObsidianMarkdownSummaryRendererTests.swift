@@ -46,10 +46,10 @@ import Foundation
             #expect(rendered.markdown.contains("meeting_id: \"\(meetingId.uuidString)\""))
             #expect(rendered.markdown.contains("title: \"Weekly Sync/Review\""))
             #expect(rendered.markdown.contains("tags:\n  - team"))
-            #expect(rendered.body.contains("[[\(meetingId.uuidString)#00:10:00|Decision]]"))
+            #expect(rendered.body.contains("[[\(meetingId.uuidString)#00:10:00|00:10:00]]"))
             #expect(rendered.body.contains("![[\(screenshotId.uuidString).jpeg]]"))
             #expect(rendered.body.contains("![[\(screenshotId.uuidString).jpeg]]\n\nScreen"))
-            #expect(rendered.body.contains("[[\(meetingId.uuidString)#00:11:00|Screen shown]]"))
+            #expect(rendered.body.contains("[[\(meetingId.uuidString)#00:11:00|00:11:00]]"))
             #expect(!rendered.body.contains("SQL(elements:"))
         }
 
@@ -82,9 +82,9 @@ import Foundation
 
             let rendered = ObsidianMarkdownSummaryRenderer.render(document: document, context: context)
 
-            #expect(rendered.body.contains("```swift\nfunc f() {\n    return 1\n}\n```\n\n([[\(meetingId.uuidString)#00:10:00|Code]])"))
+            #expect(rendered.body.contains("```swift\nfunc f() {\n    return 1\n}\n```\n\n([[\(meetingId.uuidString)#00:10:00|00:10:00]])"))
             #expect(!rendered.body.contains("``` ([["))
-            #expect(rendered.body.contains("| Launch |\n\n([[\(meetingId.uuidString)#00:11:00|Table]])"))
+            #expect(rendered.body.contains("| Launch |\n\n([[\(meetingId.uuidString)#00:11:00|00:11:00]])"))
         }
 
         @Test

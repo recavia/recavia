@@ -573,10 +573,14 @@ struct ControlPanelView: View {
                     }
                     .buttonStyle(.bordered)
 
-                    SummaryDocumentView(document: document) { screenshotId in
-                        guard let record = viewModel.screenshots.first(where: { $0.id == screenshotId }) else { return nil }
-                        return NSImage(data: record.imageData)
-                    }
+                    SummaryDocumentView(
+                        document: document,
+                        imageProvider: { screenshotId in
+                            guard let record = viewModel.screenshots.first(where: { $0.id == screenshotId }) else { return nil }
+                            return NSImage(data: record.imageData)
+                        },
+                        transcriptTextProvider: summaryTranscriptText
+                    )
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(16)
@@ -678,6 +682,22 @@ struct ControlPanelView: View {
 
     private var screenshotTimeBase: Date {
         viewModel.store.timeBase
+    }
+
+    private func summaryTranscriptText(for reference: TranscriptReference) -> String? {
+        let time = reference.time.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !time.isEmpty else { return nil }
+
+        let timeBase = viewModel.store.timeBase
+        let recordingSessions = viewModel.store.recordingSessions
+        return viewModel.store.segments.first { segment in
+            Formatters.elapsedHHmmss(
+                at: segment.startTime,
+                sessionId: segment.sessionId,
+                sessions: recordingSessions,
+                fallbackTimeBase: timeBase
+            ) == time
+        }?.displayText.nilIfBlank
     }
 
     private var displayedMeetingTitle: String? {

@@ -147,7 +147,7 @@ enum ObsidianMarkdownSummaryRenderer {
         guard !refs.isEmpty else { return text }
         let referenceText: String = refs
             .map { ref -> String in
-                "[[" + meetingId.uuidString + "#" + ref.time + "|" + obsidianAlias(ref.label) + "]]"
+                "[[" + meetingId.uuidString + "#" + ref.time + "|" + obsidianAlias(ref.time) + "]]"
             }
             .joined(separator: ", ")
         switch placement {

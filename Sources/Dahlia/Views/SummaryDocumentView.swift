@@ -4,6 +4,17 @@ import SwiftUI
 struct SummaryDocumentView: View {
     let document: SummaryDocument
     let imageProvider: (UUID) -> NSImage?
+    let transcriptTextProvider: (TranscriptReference) -> String?
+
+    init(
+        document: SummaryDocument,
+        imageProvider: @escaping (UUID) -> NSImage?,
+        transcriptTextProvider: @escaping (TranscriptReference) -> String? = { _ in nil }
+    ) {
+        self.document = document
+        self.imageProvider = imageProvider
+        self.transcriptTextProvider = transcriptTextProvider
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -195,22 +206,14 @@ struct SummaryDocumentView: View {
         if !refs.isEmpty {
             HStack(spacing: 6) {
                 ForEach(Array(refs.enumerated()), id: \.offset) { _, ref in
-                    Text(transcriptReferenceText(ref))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.primary.opacity(0.06), in: Capsule())
+                    TranscriptReferenceChip(
+                        reference: ref,
+                        transcriptText: transcriptTextProvider(ref)
+                    )
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
         }
-    }
-
-    private func transcriptReferenceText(_ ref: TranscriptReference) -> String {
-        let label = ref.label.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !label.isEmpty, label != ref.time else { return ref.time }
-        return "\(label) · \(ref.time)"
     }
 
     @ViewBuilder
@@ -225,4 +228,34 @@ struct SummaryDocumentView: View {
         }
     }
 
+}
+
+private struct TranscriptReferenceChip: View {
+    let reference: TranscriptReference
+    let transcriptText: String?
+
+    @State private var isTranscriptPopoverPresented = false
+
+    var body: some View {
+        Text(reference.time)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.primary.opacity(0.06), in: Capsule())
+            .onHover { isHovering in
+                isTranscriptPopoverPresented = isHovering && transcriptText?.nilIfBlank != nil
+            }
+            .popover(isPresented: $isTranscriptPopoverPresented, arrowEdge: .bottom) {
+                if let transcriptText = transcriptText?.nilIfBlank {
+                    Text(transcriptText)
+                        .font(.callout)
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(width: 280, alignment: .leading)
+                        .padding(10)
+                }
+            }
+    }
 }
