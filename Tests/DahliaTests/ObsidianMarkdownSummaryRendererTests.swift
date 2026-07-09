@@ -9,7 +9,7 @@ import Foundation
         func rendersFrontmatterFilenameTranscriptLinksAndImages() throws {
             let meetingId = try #require(UUID(uuidString: "019E61FD-B5D6-7A04-AC25-4B820FE951E6"))
             let screenshotId = try #require(UUID(uuidString: "019E61FD-B5D6-7A04-AC25-4B820FE951E7"))
-            let createdAt = Date(timeIntervalSince1970: 1_783_536_000)
+            let createdAt = Date(timeIntervalSince1970: 1_783_598_400)
             let screenshot = MeetingScreenshotRecord(
                 id: screenshotId,
                 meetingId: meetingId,
@@ -47,7 +47,7 @@ import Foundation
         func legacyMarkdownParseRenderNormalizesScreenshotFilename() throws {
             let meetingId = UUID.v7()
             let screenshotId = try #require(UUID(uuidString: "019E61FD-B5D6-7A04-AC25-4B820FE951E6"))
-            let createdAt = Date(timeIntervalSince1970: 1_783_536_000)
+            let createdAt = Date(timeIntervalSince1970: 1_783_598_400)
             let screenshot = MeetingScreenshotRecord(
                 id: screenshotId,
                 meetingId: meetingId,
