@@ -56,12 +56,14 @@ struct ProjectManagementView: View {
         }
     }
 
-    private var filteredProjects: [ProjectOverviewItem] {
+    private var projectNodes: [ProjectTreeNode] {
+        ProjectTreeNode.buildNodes(from: sidebarViewModel.allProjectItems)
+    }
+
+    private var filteredProjectNodes: [ProjectTreeNode] {
         let query = projectSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return sidebarViewModel.allProjectItems }
-        return sidebarViewModel.allProjectItems.filter { project in
-            project.projectName.localizedCaseInsensitiveContains(query)
-        }
+        guard !query.isEmpty else { return projectNodes }
+        return projectNodes.compactMap { $0.filtered(matching: query) }
     }
 
     private var selectedProject: ProjectOverviewItem? {
@@ -71,7 +73,7 @@ struct ProjectManagementView: View {
 
     private var projectSidebar: some View {
         List(selection: $selectedProjectId) {
-            if filteredProjects.isEmpty {
+            if filteredProjectNodes.isEmpty {
                 ContentUnavailableView {
                     Label(
                         sidebarViewModel.allProjectItems.isEmpty ? L10n.noProjectsYet : L10n.noResultsFound,
@@ -80,9 +82,9 @@ struct ProjectManagementView: View {
                 }
                 .listRowSeparator(.hidden)
             } else {
-                ForEach(filteredProjects) { project in
-                    ProjectManagementRow(project: project)
-                        .tag(project.projectId)
+                OutlineGroup(filteredProjectNodes, children: \.children) { node in
+                    ProjectManagementRow(node: node, isSelected: selectedProjectId == node.id)
+                        .tag(node.id)
                 }
             }
         }
@@ -375,28 +377,70 @@ struct ProjectManagementView: View {
 }
 
 private struct ProjectManagementRow: View {
-    let project: ProjectOverviewItem
+    let node: ProjectTreeNode
+    let isSelected: Bool
+
+    private var project: ProjectOverviewItem {
+        node.project
+    }
 
     var body: some View {
         Label {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(project.projectName)
+            HStack(spacing: 6) {
+                Text(node.displayName)
                     .lineLimit(1)
+                    .truncationMode(.middle)
+                    .layoutPriority(1)
 
-                HStack(spacing: 6) {
-                    Text(L10n.meetingCount(project.meetingCount))
+                ProjectMeetingCountBadge(count: node.meetingCount, isSelected: isSelected)
 
-                    if project.missingOnDisk {
-                        Text(L10n.missingOnDisk)
-                    }
+                Spacer(minLength: 0)
+
+                if project.missingOnDisk {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(isSelected ? .white.opacity(0.85) : .orange)
+                        .help(L10n.missingOnDisk)
                 }
-                .font(.caption)
-                .foregroundStyle(project.missingOnDisk ? .orange : .secondary)
-                .lineLimit(1)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityLabel)
         } icon: {
             Image(systemName: project.missingOnDisk ? "folder.badge.questionmark" : "folder")
-                .foregroundStyle(project.missingOnDisk ? .orange : .secondary)
+                .foregroundStyle(project.missingOnDisk ? .orange : (isSelected ? .white : .secondary))
         }
+    }
+
+    private var accessibilityLabel: String {
+        var label = "\(node.displayName), \(L10n.meetingCount(node.meetingCount))"
+        if project.missingOnDisk {
+            label += ", \(L10n.missingOnDisk)"
+        }
+        return label
+    }
+}
+
+private struct ProjectMeetingCountBadge: View {
+    let count: Int
+    let isSelected: Bool
+
+    var body: some View {
+        Text("\(count)")
+            .font(.caption2.weight(.semibold).monospacedDigit())
+            .foregroundStyle(isSelected ? Color.white : Color(nsColor: .secondaryLabelColor))
+            .lineLimit(1)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .frame(minWidth: 18)
+            .background(backgroundColor, in: Capsule())
+            .fixedSize(horizontal: true, vertical: false)
+            .accessibilityHidden(true)
+    }
+
+    private var backgroundColor: Color {
+        if isSelected {
+            return Color.white.opacity(0.20)
+        }
+        return Color(nsColor: .secondaryLabelColor).opacity(0.14)
     }
 }

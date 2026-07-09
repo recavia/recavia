@@ -7,6 +7,11 @@ enum WindowID {
     static let projectManager = "project-manager"
 }
 
+private enum MainWindowMetrics {
+    static let defaultWidth: CGFloat = 1120
+    static let defaultHeight: CGFloat = 740
+}
+
 @main
 struct DahliaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -69,6 +74,7 @@ struct DahliaApp: App {
             }
         }
         .windowResizability(.contentMinSize)
+        .defaultSize(width: MainWindowMetrics.defaultWidth, height: MainWindowMetrics.defaultHeight)
         .defaultLaunchBehavior(.presented)
 
         Window(L10n.vault, id: WindowID.vaultManager) {

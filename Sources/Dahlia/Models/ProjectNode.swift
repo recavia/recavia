@@ -62,3 +62,75 @@ struct FlatProjectRow: Identifiable, Equatable {
         return parentNames
     }
 }
+
+/// SwiftUI の OutlineGroup に渡すプロジェクトツリー行。
+struct ProjectTreeNode: Identifiable, Equatable {
+    let project: ProjectOverviewItem
+    let displayName: String
+    let meetingCount: Int
+    let children: [ProjectTreeNode]?
+
+    var id: UUID { project.projectId }
+
+    static func buildNodes(from projects: [ProjectOverviewItem]) -> [ProjectTreeNode] {
+        guard !projects.isEmpty else { return [] }
+
+        let projectNames = Set(projects.map(\.projectName))
+        var roots: [ProjectOverviewItem] = []
+        var childrenByParent: [String: [ProjectOverviewItem]] = [:]
+
+        for project in projects {
+            guard let parentName = parentName(for: project.projectName),
+                  projectNames.contains(parentName) else {
+                roots.append(project)
+                continue
+            }
+
+            childrenByParent[parentName, default: []].append(project)
+        }
+
+        func buildNode(for project: ProjectOverviewItem) -> ProjectTreeNode {
+            let childNodes = childrenByParent[project.projectName, default: []].map(buildNode)
+            let hasParent = parentName(for: project.projectName).map(projectNames.contains) ?? false
+            let totalMeetingCount = project.meetingCount + childNodes.reduce(0) { $0 + $1.meetingCount }
+
+            return ProjectTreeNode(
+                project: project,
+                displayName: displayName(for: project.projectName, hasParent: hasParent),
+                meetingCount: totalMeetingCount,
+                children: childNodes.isEmpty ? nil : childNodes
+            )
+        }
+
+        return roots.map(buildNode)
+    }
+
+    func filtered(matching query: String) -> ProjectTreeNode? {
+        let childNodes = children?.compactMap { $0.filtered(matching: query) } ?? []
+        guard matches(query) || !childNodes.isEmpty else { return nil }
+
+        return ProjectTreeNode(
+            project: project,
+            displayName: displayName,
+            meetingCount: meetingCount,
+            children: childNodes.isEmpty ? nil : childNodes
+        )
+    }
+
+    private func matches(_ query: String) -> Bool {
+        project.projectName.localizedCaseInsensitiveContains(query)
+            || displayName.localizedCaseInsensitiveContains(query)
+    }
+
+    private static func parentName(for name: String) -> String? {
+        let components = name.split(separator: "/")
+        guard components.count > 1 else { return nil }
+        return components.dropLast().joined(separator: "/")
+    }
+
+    private static func displayName(for name: String, hasParent: Bool) -> String {
+        guard hasParent,
+              let leafName = name.split(separator: "/").last else { return name }
+        return String(leafName)
+    }
+}

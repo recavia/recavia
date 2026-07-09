@@ -600,6 +600,8 @@ enum L10n {
     static var summaryGenerated: String { String(localized: "Summary generated", bundle: bundle) }
     static var openSummary: String { String(localized: "Open Summary", bundle: bundle) }
     static var generateSummary: String { String(localized: "Generate Summary", bundle: bundle) }
+    static var shareSummary: String { String(localized: "Share Summary", bundle: bundle) }
+    static var copySummary: String { String(localized: "Copy Summary", bundle: bundle) }
     static var summaryPrompt: String { String(localized: "Summary Prompt", bundle: bundle) }
     static var resetToDefault: String { String(localized: "Reset to Default", bundle: bundle) }
     static var summaryTemplate: String { String(localized: "Summary Template", bundle: bundle) }

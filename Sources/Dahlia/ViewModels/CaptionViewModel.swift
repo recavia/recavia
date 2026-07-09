@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import CoreAudio
 import GRDB
@@ -121,6 +122,13 @@ final class CaptionViewModel: ObservableObject {
         return !currentSummaryDocument.sections.isEmpty
     }
 
+    var canShareCurrentSummary: Bool {
+        guard let currentSummaryDocument else { return false }
+        return currentSummaryDocument.title.nilIfBlank != nil
+            || !currentSummaryDocument.sections.isEmpty
+            || !currentSummaryDocument.actionItems.isEmpty
+    }
+
     var hasDraftMeeting: Bool {
         draftMeeting != nil
     }
@@ -133,6 +141,16 @@ final class CaptionViewModel: ObservableObject {
     var currentSummaryGoogleFileURL: URL? {
         guard let fileId = currentSummaryGoogleFileId?.nilIfBlank else { return nil }
         return URL(string: "https://docs.google.com/document/d/\(fileId)/edit")
+    }
+
+    func copyCurrentSummaryForSlack() {
+        guard let currentSummaryDocument, canShareCurrentSummary else { return }
+
+        let text = SlackSummaryRenderer.render(document: currentSummaryDocument, actionItemsHeading: L10n.actionItems)
+        guard text.nilIfBlank != nil else { return }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     /// 録音中でなく、文字起こしを表示中の場合 true。

@@ -529,11 +529,9 @@ struct ControlPanelView: View {
             DetailTabBar(selection: $selectedTab, viewModel: viewModel)
         }
 
-        ToolbarItemGroup(placement: .primaryAction) {
+        ToolbarItem(placement: .primaryAction) {
             if showsToolbarRecordButton {
-                GenerateSummaryToolbarButton(viewModel: viewModel)
-
-                RecordToolbarButton(
+                SummaryToolbarControlGroup(
                     viewModel: viewModel,
                     sidebarViewModel: sidebarViewModel,
                     recordingCoordinator: recordingCoordinator

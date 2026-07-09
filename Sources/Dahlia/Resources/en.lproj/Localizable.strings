@@ -319,6 +319,8 @@
 "Summary generated" = "Summary generated";
 "Open Summary" = "Open Summary";
 "Generate Summary" = "Generate Summary";
+"Share Summary" = "Share Summary";
+"Copy Summary" = "Copy Summary";
 "Summary Prompt" = "Summary Prompt";
 "Reset to Default" = "Reset to Default";
 "Summary Template" = "Summary Template";
