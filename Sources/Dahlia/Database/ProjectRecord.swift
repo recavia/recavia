@@ -10,7 +10,6 @@ struct ProjectRecord: Codable, FetchableRecord, PersistableRecord {
     var name: String
     var createdAt: Date
     var description = ""
-    var googleDriveFolderId: String? = nil
     var missingOnDisk = false
 
     // MARK: - Shared DB Helpers
@@ -24,8 +23,7 @@ struct ProjectRecord: Codable, FetchableRecord, PersistableRecord {
                 vaultId: vaultId,
                 name: name,
                 createdAt: now,
-                description: "",
-                googleDriveFolderId: nil
+                description: ""
             )
             try record.insert(db, onConflict: .ignore)
         }

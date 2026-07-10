@@ -24,8 +24,6 @@ enum GoogleOAuthScope {
     ]
     static let drive: Set = [
         "https://www.googleapis.com/auth/drive.file",
-        "https://www.googleapis.com/auth/drive.metadata.readonly",
-        "https://www.googleapis.com/auth/drive.readonly",
     ]
 
     static func authorizationScopes(for requestedScopes: Set<String>) -> Set<String> {

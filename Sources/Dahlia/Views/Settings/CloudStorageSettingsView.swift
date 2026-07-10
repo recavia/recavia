@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct CloudStorageSettingsView: View {
-    @Environment(\.openWindow) private var openWindow
     @ObservedObject private var driveStore = GoogleDriveStore.shared
 
     var body: some View {
@@ -17,26 +16,9 @@ struct CloudStorageSettingsView: View {
                     )
                 }
             } header: {
-                Text(L10n.googleDrive)
+                Text(L10n.googleDocs)
             } footer: {
-                Text(L10n.googleDriveSettingsDescription)
-            }
-
-            Section {
-                LabeledContent {
-                    Button {
-                        openWindow(id: WindowID.projectManager)
-                    } label: {
-                        Label(L10n.manageProjects, systemImage: "folder")
-                    }
-                } label: {
-                    Text(L10n.projectManagement)
-                    Text(L10n.summaryDestinationsDescription)
-                }
-            } header: {
-                Text(L10n.projectDriveFolders)
-            } footer: {
-                Text(L10n.projectDriveFoldersDescription)
+                Text(L10n.googleDocsSettingsDescription)
             }
         }
         .formStyle(.grouped)
@@ -49,7 +31,7 @@ struct CloudStorageSettingsView: View {
         LabeledContent {
             actionButton
         } label: {
-            Text(driveStore.account?.displayName ?? L10n.googleDriveNotConnected)
+            Text(driveStore.account?.displayName ?? L10n.googleDocsNotConnected)
             Text(accountSubtitle)
         }
     }
@@ -81,9 +63,9 @@ struct CloudStorageSettingsView: View {
         }
 
         if let account = driveStore.account, driveStore.isAuthorized {
-            return account.email.isEmpty ? L10n.googleDriveConnected : account.email
+            return account.email.isEmpty ? L10n.googleDocsConnected : account.email
         }
 
-        return L10n.googleDriveConnectDescription
+        return L10n.googleDocsConnectDescription
     }
 }

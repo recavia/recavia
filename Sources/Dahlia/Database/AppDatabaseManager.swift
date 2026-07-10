@@ -122,6 +122,7 @@ final class AppDatabaseManager: Sendable {
                 .references("vaults", onDelete: .cascade)
             t.column("name", .text).notNull()
             t.column("createdAt", .datetime).notNull()
+            // Kept for compatibility with databases migrated by v3. The app no longer reads or writes this value.
             t.column("googleDriveFolderId", .text)
             t.column("missingOnDisk", .boolean).notNull().defaults(to: false)
             t.uniqueKey(["vaultId", "name"])

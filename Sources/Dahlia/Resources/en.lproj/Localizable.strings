@@ -346,6 +346,8 @@
 "Open Summary" = "Open Summary";
 "Generate Summary" = "Generate Summary";
 "Share Summary" = "Share Summary";
+"Export to Google Docs" = "Export to Google Docs";
+"Could not export the summary to Google Docs." = "Could not export the summary to Google Docs.";
 "Copy for Google Docs" = "Copy for Google Docs";
 "Copy for Slack" = "Copy for Slack";
 "Summary Prompt" = "Summary Prompt";
@@ -404,37 +406,17 @@
 /* Keychain */
 "Authenticate to access your API token stored in Keychain." = "Authenticate to access your API token stored in Keychain.";
 "Cloud Storage" = "Cloud Storage";
-"Google Drive" = "Google Drive";
-"Connect a Google account to export summaries to Google Drive. Destination folders are configured per project." = "Connect a Google account to export summaries to Google Drive. Destination folders are configured per project.";
-"Sign in with Google to choose project folders and export summaries." = "Sign in with Google to choose project folders and export summaries.";
-"Google Drive connected" = "Google Drive connected";
-"No Google Drive account connected" = "No Google Drive account connected";
-"Project Drive Folders" = "Project Drive Folders";
-"Choose the Google Drive folder used when each project's summaries are exported." = "Choose the Google Drive folder used when each project's summaries are exported.";
-"Create a project from a meeting to configure its Google Drive folder." = "Create a project from a meeting to configure its Google Drive folder.";
-"Google Drive folder configured" = "Google Drive folder configured";
-"Loading Google Drive folders…" = "Loading Google Drive folders…";
+"Google Docs" = "Google Docs";
+"Connect a Google account to export summaries, including images, to Google Docs from the Share menu." = "Connect a Google account to export summaries, including images, to Google Docs from the Share menu.";
+"Sign in with Google to export summaries to Google Docs." = "Sign in with Google to export summaries to Google Docs.";
+"Google Docs connected" = "Google Docs connected";
 "No previous Google session was found." = "No previous Google session was found.";
 "Set GOOGLE_CLIENT_ID before connecting Google services." = "Set GOOGLE_CLIENT_ID in Developer Settings or the environment before connecting Google services.";
 "Unexpected response from Google" = "Unexpected response from Google";
 "Google HTTP %lld: %@" = "Google HTTP %lld: %@";
 "Google account connected, but Calendar access has not been granted yet." = "Google account connected, but Calendar access has not been granted yet.";
-"This Google Drive folder is unavailable or you no longer have access to it." = "This Google Drive folder is unavailable or you no longer have access to it.";
 "Unexpected response from Google Drive" = "Unexpected response from Google Drive";
 "Google Drive HTTP %lld: %@" = "Google Drive HTTP %lld: %@";
-"Search Google Drive folders..." = "Search Google Drive folders...";
-"Search My Drive and shared drives, then choose the folder where summaries should be uploaded." = "Search My Drive and shared drives, then choose the folder where summaries should be uploaded.";
-"Recent" = "Recent";
-"My Drive" = "My Drive";
-"Shared drives" = "Shared drives";
-"Shared drive" = "Shared drive";
-"No folders found" = "No folders found";
-"No folders in this location" = "No folders in this location";
-"No Google Drive folder selected" = "No Google Drive folder selected";
-"Choose Folder" = "Choose Folder";
-"Change Folder" = "Change Folder";
-"Select This Folder" = "Select This Folder";
-"The summary was saved locally, but uploading to Google Drive failed." = "The summary was saved locally, but uploading to Google Drive failed.";
 
 /* Batch Transcription */
 "Transcription Method" = "Transcription Method";

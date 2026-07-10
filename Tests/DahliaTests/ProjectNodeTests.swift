@@ -116,7 +116,6 @@ import Foundation
                 projectId: .v7(),
                 projectName: name,
                 createdAt: Date(),
-                googleDriveFolderId: nil,
                 missingOnDisk: false,
                 meetingCount: meetingCount,
                 latestMeetingDate: nil

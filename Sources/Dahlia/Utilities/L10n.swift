@@ -426,7 +426,7 @@ enum L10n {
         localized: "Select a calendar event to prepare transcription.",
         bundle: bundle
     ) }
-    static var googleDrive: String { String(localized: "Google Drive", bundle: bundle) }
+    static var googleDocs: String { String(localized: "Google Docs", bundle: bundle) }
     static var googleCalendarSettingsDescription: String { String(
         localized: "Connect a Google account and choose which calendars appear on Home.",
         bundle: bundle
@@ -435,8 +435,8 @@ enum L10n {
         localized: "Use events from the Calendar app on this Mac.",
         bundle: bundle
     ) }
-    static var googleDriveSettingsDescription: String { String(
-        localized: "Connect a Google account to export summaries to Google Drive. Destination folders are configured per project.",
+    static var googleDocsSettingsDescription: String { String(
+        localized: "Connect a Google account to export summaries, including images, to Google Docs from the Share menu.",
         bundle: bundle
     ) }
     static var googleCalendarDisplayCalendars: String { String(localized: "Display Calendars", bundle: bundle) }
@@ -455,22 +455,12 @@ enum L10n {
     static var googleCalendarNotConnected: String { String(localized: "No Google account connected", bundle: bundle) }
     static var googleDriveConnect: String { googleCalendarConnect }
     static var googleDriveDisconnect: String { googleCalendarDisconnect }
-    static var googleDriveConnectDescription: String { String(
-        localized: "Sign in with Google to choose project folders and export summaries.",
+    static var googleDocsConnectDescription: String { String(
+        localized: "Sign in with Google to export summaries to Google Docs.",
         bundle: bundle
     ) }
-    static var googleDriveConnected: String { String(localized: "Google Drive connected", bundle: bundle) }
-    static var googleDriveNotConnected: String { String(localized: "No Google Drive account connected", bundle: bundle) }
-    static var projectDriveFolders: String { String(localized: "Project Drive Folders", bundle: bundle) }
-    static var projectDriveFoldersDescription: String { String(
-        localized: "Choose the Google Drive folder used when each project's summaries are exported.",
-        bundle: bundle
-    ) }
-    static var projectDriveFoldersEmptyDescription: String { String(
-        localized: "Create a project from a meeting to configure its Google Drive folder.",
-        bundle: bundle
-    ) }
-    static var googleDriveFolderConfigured: String { String(localized: "Google Drive folder configured", bundle: bundle) }
+    static var googleDocsConnected: String { String(localized: "Google Docs connected", bundle: bundle) }
+    static var googleDocsNotConnected: String { googleCalendarNotConnected }
     static var googleCalendarPrimaryCalendar: String { String(localized: "Primary calendar", bundle: bundle) }
     static var calendarPrimaryCalendar: String { googleCalendarPrimaryCalendar }
     static var googleCalendarNoCalendars: String { String(localized: "No calendars are available for this Google account.", bundle: bundle) }
@@ -478,7 +468,6 @@ enum L10n {
     static var calendarLoading: String { String(localized: "Loading calendars…", bundle: bundle) }
     static var googleCalendarLoading: String { String(localized: "Loading Google Calendar…", bundle: bundle) }
     static var macOSCalendarLoading: String { String(localized: "Loading macOS Calendar…", bundle: bundle) }
-    static var googleDriveLoadingFolders: String { String(localized: "Loading Google Drive folders…", bundle: bundle) }
     static var googleCalendarRetry: String { String(localized: "Retry", bundle: bundle) }
     static var googleCalendarAllDay: String { String(localized: "All day", bundle: bundle) }
     static var calendarAllDay: String { googleCalendarAllDay }
@@ -584,32 +573,9 @@ enum L10n {
         localized: "Could not parse Google Calendar date: \(value)",
         bundle: bundle
     ) }
-    static var googleDriveFolderUnavailable: String { String(
-        localized: "This Google Drive folder is unavailable or you no longer have access to it.",
-        bundle: bundle
-    ) }
     static var googleDriveUnexpectedResponse: String { String(localized: "Unexpected response from Google Drive", bundle: bundle) }
     static func googleDriveHTTPError(_ code: Int, _ detail: String) -> String { String(
         localized: "Google Drive HTTP \(code): \(detail)",
-        bundle: bundle
-    ) }
-    static var googleDriveSearchPlaceholder: String { String(localized: "Search Google Drive folders...", bundle: bundle) }
-    static var googleDriveFolderPickerDescription: String { String(
-        localized: "Search My Drive and shared drives, then choose the folder where summaries should be uploaded.",
-        bundle: bundle
-    ) }
-    static var googleDriveRecent: String { String(localized: "Recent", bundle: bundle) }
-    static var googleDriveMyDrive: String { String(localized: "My Drive", bundle: bundle) }
-    static var googleDriveSharedDrives: String { String(localized: "Shared drives", bundle: bundle) }
-    static var googleDriveSharedDriveLabel: String { String(localized: "Shared drive", bundle: bundle) }
-    static var googleDriveNoFolders: String { String(localized: "No folders found", bundle: bundle) }
-    static var googleDriveNoFoldersInLocation: String { String(localized: "No folders in this location", bundle: bundle) }
-    static var googleDriveNoFolderSelected: String { String(localized: "No Google Drive folder selected", bundle: bundle) }
-    static var chooseFolder: String { String(localized: "Choose Folder", bundle: bundle) }
-    static var changeFolder: String { String(localized: "Change Folder", bundle: bundle) }
-    static var selectFolder: String { String(localized: "Select This Folder", bundle: bundle) }
-    static var googleDriveExportFailed: String { String(
-        localized: "The summary was saved locally, but uploading to Google Drive failed.",
         bundle: bundle
     ) }
 
@@ -719,6 +685,8 @@ enum L10n {
     static var openSummary: String { String(localized: "Open Summary", bundle: bundle) }
     static var generateSummary: String { String(localized: "Generate Summary", bundle: bundle) }
     static var shareSummary: String { String(localized: "Share Summary", bundle: bundle) }
+    static var exportToGoogleDocs: String { String(localized: "Export to Google Docs", bundle: bundle) }
+    static var googleDocsExportFailed: String { String(localized: "Could not export the summary to Google Docs.", bundle: bundle) }
     static var copySummaryForGoogleDocs: String { String(localized: "Copy for Google Docs", bundle: bundle) }
     static var copySummaryForSlack: String { String(localized: "Copy for Slack", bundle: bundle) }
     static var summaryPrompt: String { String(localized: "Summary Prompt", bundle: bundle) }

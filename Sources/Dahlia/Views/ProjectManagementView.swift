@@ -4,14 +4,12 @@ import SwiftUI
 struct ProjectManagementView: View {
     var sidebarViewModel: SidebarViewModel
 
-    @ObservedObject private var driveStore = GoogleDriveStore.shared
     @State private var selectedProjectId: UUID?
     @State private var projectSearchText = ""
     @State private var isShowingProjectCreation = false
     @State private var newProjectName = ""
     @State private var isShowingProjectCreationError = false
     @State private var projectCreationErrorMessage = ""
-    @State private var pickingProjectId: UUID?
     @State private var projectDescription = ""
     @State private var descriptionStatusMessage: String?
     @State private var descriptionSaveFailed = false
@@ -46,15 +44,6 @@ struct ProjectManagementView: View {
         .onDisappear {
             descriptionSaveTask?.cancel()
             persistProjectDescriptionIfNeeded(for: selectedProjectId)
-        }
-        .task {
-            await driveStore.restoreSessionIfNeeded()
-        }
-        .sheet(item: pickingProjectBinding) { project in
-            GoogleDriveFolderPickerView { folder in
-                sidebarViewModel.updateProjectGoogleDriveFolder(id: project.projectId, folderId: folder.id)
-                pickingProjectId = nil
-            }
         }
     }
 
@@ -175,7 +164,6 @@ struct ProjectManagementView: View {
     private func destinationSection(for project: ProjectOverviewItem) -> some View {
         Section {
             projectFolderRow(for: project)
-            googleDriveRow(for: project)
         } header: {
             Text(L10n.summaryDestinations)
         } footer: {
@@ -195,61 +183,6 @@ struct ProjectManagementView: View {
             Text(L10n.localSummaryFolder)
             Text(projectFolderPath(for: project) ?? L10n.noVaultSelected)
         }
-    }
-
-    private func googleDriveRow(for project: ProjectOverviewItem) -> some View {
-        LabeledContent {
-            HStack(spacing: 8) {
-                if let folderURL = googleDriveFolderURL(for: project) {
-                    Button {
-                        NSWorkspace.shared.open(folderURL)
-                    } label: {
-                        Label(L10n.openInBrowser, systemImage: "safari")
-                    }
-                    .labelStyle(.iconOnly)
-                    .help(L10n.openInBrowser)
-                }
-
-                Button(hasGoogleDriveFolder(for: project) ? L10n.changeFolder : L10n.chooseFolder) {
-                    pickingProjectId = project.projectId
-                }
-                .disabled(!driveStore.isAuthorized)
-
-                if hasGoogleDriveFolder(for: project) {
-                    Button(L10n.clear) {
-                        sidebarViewModel.updateProjectGoogleDriveFolder(id: project.projectId, folderId: nil)
-                    }
-                }
-            }
-        } label: {
-            Text(L10n.googleDrive)
-            Text(googleDriveDescription(for: project))
-        }
-    }
-
-    private func googleDriveDescription(for project: ProjectOverviewItem) -> String {
-        if !driveStore.isConfigured {
-            return L10n.googleAccountClientIDMissingMessage
-        }
-        if !driveStore.isAuthorized {
-            return L10n.googleDriveConnectDescription
-        }
-        if hasGoogleDriveFolder(for: project) {
-            return L10n.googleDriveFolderConfigured
-        }
-        return L10n.googleDriveNoFolderSelected
-    }
-
-    private var pickingProjectBinding: Binding<ProjectOverviewItem?> {
-        Binding(
-            get: {
-                guard let pickingProjectId else { return nil }
-                return sidebarViewModel.allProjectItems.first(where: { $0.projectId == pickingProjectId })
-            },
-            set: { project in
-                pickingProjectId = project?.projectId
-            }
-        )
     }
 
     private func selectInitialProjectIfNeeded() {
@@ -303,16 +236,6 @@ struct ProjectManagementView: View {
     private func openProjectFolder(for project: ProjectOverviewItem) {
         guard let url = projectFolderURL(for: project) else { return }
         NSWorkspace.shared.open(url)
-    }
-
-    private func googleDriveFolderURL(for project: ProjectOverviewItem) -> URL? {
-        guard let folderId = project.googleDriveFolderId?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !folderId.isEmpty else { return nil }
-        return URL(string: "https://drive.google.com/drive/folders/\(folderId)")
-    }
-
-    private func hasGoogleDriveFolder(for project: ProjectOverviewItem) -> Bool {
-        project.googleDriveFolderId?.isEmpty == false
     }
 
     private func loadProjectDescription(for projectId: UUID?) {

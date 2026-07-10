@@ -235,7 +235,6 @@ final class SidebarViewModel {
                     projects.name AS projectName,
                     projects.description AS projectDescription,
                     projects.createdAt AS createdAt,
-                    projects.googleDriveFolderId AS googleDriveFolderId,
                     projects.missingOnDisk AS missingOnDisk,
                     COUNT(meetings.id) AS meetingCount,
                     MAX(meetings.createdAt) AS latestMeetingDate
@@ -397,14 +396,6 @@ final class SidebarViewModel {
         } catch {
             lastError = error.localizedDescription
             return nil
-        }
-    }
-
-    func updateProjectGoogleDriveFolder(id: UUID, folderId: String?) {
-        do {
-            try meetingRepository?.updateProjectGoogleDriveFolder(id: id, folderId: folderId)
-        } catch {
-            lastError = error.localizedDescription
         }
     }
 

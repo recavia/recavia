@@ -72,14 +72,19 @@ import GRDB
             }
 
             let migrated = try AppDatabaseManager(path: databaseURL.path)
-            let project = try migrated.dbQueue.read { db in
-                try ProjectRecord.fetchOne(db, key: projectId)
+            let row = try migrated.dbQueue.read { db in
+                try Row.fetchOne(
+                    db,
+                    sql: "SELECT * FROM projects WHERE id = ?",
+                    arguments: [projectId]
+                )
             }
 
-            let existingProject = try #require(project)
+            let existingRow = try #require(row)
+            let existingProject = try ProjectRecord(row: existingRow)
             #expect(existingProject.name == "Existing Project")
             #expect(existingProject.description.isEmpty)
-            #expect(existingProject.googleDriveFolderId == "folder-123")
+            #expect(existingRow["googleDriveFolderId"] == "folder-123" as String?)
         }
 
         @Test
@@ -269,7 +274,7 @@ import GRDB
         }
 
         @Test
-        func repositoryUpdatesProjectGoogleDriveFolder() throws {
+        func repositoryUpdatesProjectDescription() throws {
             let database = try AppDatabaseManager(path: ":memory:")
             let repository = MeetingRepository(dbQueue: database.dbQueue)
             let vault = VaultRecord(
@@ -282,12 +287,10 @@ import GRDB
             try repository.insertVault(vault)
 
             let project = try repository.fetchOrCreateProject(name: "Project A", vaultId: vault.id)
-            try repository.updateProjectGoogleDriveFolder(id: project.id, folderId: "folder-123")
             try repository.updateProjectDescription(id: project.id, description: "Customer rollout")
 
             let fetchedProject = try repository.fetchProject(id: project.id)
             let updatedProject = try #require(fetchedProject)
-            #expect(updatedProject.googleDriveFolderId == "folder-123")
             #expect(updatedProject.description == "Customer rollout")
         }
 
@@ -611,7 +614,7 @@ import GRDB
             XCTAssertTrue(columns.contains("translatedText"))
         }
 
-        func testRepositoryUpdatesProjectGoogleDriveFolder() throws {
+        func testRepositoryUpdatesProjectDescription() throws {
             let database = try AppDatabaseManager(path: ":memory:")
             let repository = MeetingRepository(dbQueue: database.dbQueue)
             let vault = VaultRecord(
@@ -624,10 +627,10 @@ import GRDB
             try repository.insertVault(vault)
 
             let project = try repository.fetchOrCreateProject(name: "Project A", vaultId: vault.id)
-            try repository.updateProjectGoogleDriveFolder(id: project.id, folderId: "folder-123")
+            try repository.updateProjectDescription(id: project.id, description: "Customer rollout")
 
             let updatedProject = try XCTUnwrap(repository.fetchProject(id: project.id))
-            XCTAssertEqual(updatedProject.googleDriveFolderId, "folder-123")
+            XCTAssertEqual(updatedProject.description, "Customer rollout")
         }
 
         func testInitializesInstructionsTableWithConstraints() throws {
