@@ -182,6 +182,19 @@ private struct RecordingStatusBar: View {
             ?? Date()
     }
 
+    private var transcriptionMode: TranscriptionMode {
+        viewModel.activeTranscriptionMode ?? .defaultMode
+    }
+
+    private var recordingLabels: (activity: String, returnToMeeting: String, stop: String) {
+        switch transcriptionMode {
+        case .realtime:
+            (L10n.transcribingNow, L10n.returnToTranscribingMeeting, L10n.stopTranscribing)
+        case .batch:
+            (L10n.recordingNow, L10n.returnToRecordingMeeting, L10n.stopRecording)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
@@ -192,18 +205,18 @@ private struct RecordingStatusBar: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(recordingMeetingId == nil)
-                .help(L10n.returnToTranscribingMeeting)
-                .accessibilityLabel("\(L10n.transcribingNow), \(recordingTitle)")
+                .help(recordingLabels.returnToMeeting)
+                .accessibilityLabel("\(recordingLabels.activity), \(recordingTitle)")
 
                 Button {
                     recordingCoordinator.stopRecording()
                 } label: {
-                    Label(L10n.stopTranscribing, systemImage: "stop.fill")
+                    Label(recordingLabels.stop, systemImage: "stop.fill")
                 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .help(L10n.stopTranscribing)
+                .help(recordingLabels.stop)
             }
 
             Divider()
@@ -229,12 +242,10 @@ private struct RecordingStatusBar: View {
 
     private var panelContent: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(.red)
-                .frame(width: 8, height: 8)
+            RecordingActivityIcon(mode: transcriptionMode)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.transcribingNow)
+                Text(recordingLabels.activity)
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.red)
 

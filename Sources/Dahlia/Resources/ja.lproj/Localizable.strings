@@ -100,7 +100,7 @@
 "Action items extracted from summaries will appear here." = "要約から抽出された Action Items がここに表示されます。";
 "We couldn't detect any conversation in this meeting." = "この meeting では会話を検出できませんでした。";
 "Recording now" = "録音中";
-"Transcribing now" = "文字起こし中";
+"Transcribing now" = "ライブ文字起こし中";
 "Return to recording meeting" = "録音中のミーティングに戻る";
 "Return to transcribing meeting" = "文字起こし中のミーティングに戻る";
 "Yesterday" = "昨日";
@@ -435,9 +435,8 @@
 
 /* Batch Transcription */
 "Transcription Method" = "文字起こし方式";
-"Real-time" = "リアルタイム";
-"After Recording" = "録音後に処理";
-"Show the transcript while recording. Audio files are not saved." = "録音中に文字起こしを表示します。音声ファイルは保存しません。";
+"Enable Real-time Transcription" = "リアルタイム文字起こしを有効にする";
+"Show the transcript while recording. Accuracy may be lower than transcription after recording, and audio files are not saved." = "録音中に文字起こしを表示します。録音後の文字起こしより精度が低下する場合があり、音声ファイルは保存されません。";
 "Record audio first, then create a higher-accuracy transcript after recording stops." = "先に音声を録音し、録音終了後に高精度な文字起こしを作成します。";
 "Keep Audio After Transcription" = "文字起こし後も音声を残す";
 "Keep the CAF audio files in the vault after batch transcription succeeds." = "バッチ文字起こし成功後もCAF音声ファイルを保管庫に残します。";

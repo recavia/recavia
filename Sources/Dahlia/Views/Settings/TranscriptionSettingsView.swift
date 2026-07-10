@@ -11,17 +11,13 @@ struct TranscriptionSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Picker(selection: $settings.transcriptionModeRawValue) {
-                    ForEach(TranscriptionMode.allCases) { mode in
-                        Text(mode.displayName).tag(mode.rawValue)
-                    }
-                } label: {
-                    Text(L10n.transcriptionMethod)
-                    Text(settings.transcriptionMode.description)
+                Toggle(isOn: $settings.isRealtimeTranscriptionEnabled) {
+                    Text(L10n.enableRealtimeTranscription)
+                    Text(L10n.realtimeTranscriptionDescription)
                 }
-                .pickerStyle(.radioGroup)
+                .toggleStyle(.switch)
 
-                if settings.transcriptionMode == .batch {
+                if !settings.isRealtimeTranscriptionEnabled {
                     Toggle(isOn: $settings.retainAudioAfterBatchTranscription) {
                         Text(L10n.retainBatchAudio)
                         Text(L10n.retainBatchAudioDescription)
@@ -30,6 +26,10 @@ struct TranscriptionSettingsView: View {
                 }
             } header: {
                 Text(L10n.transcriptionMethod)
+            } footer: {
+                if !settings.isRealtimeTranscriptionEnabled {
+                    Text(L10n.batchTranscriptionDescription)
+                }
             }
 
             Section {

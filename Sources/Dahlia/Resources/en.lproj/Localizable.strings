@@ -100,7 +100,7 @@
 "Action items extracted from summaries will appear here." = "Action items extracted from summaries will appear here.";
 "We couldn't detect any conversation in this meeting." = "We couldn't detect any conversation in this meeting.";
 "Recording now" = "Recording now";
-"Transcribing now" = "Transcribing";
+"Transcribing now" = "Live transcription";
 "Return to recording meeting" = "Return to recording meeting";
 "Return to transcribing meeting" = "Return to transcribing meeting";
 "Yesterday" = "Yesterday";
@@ -435,9 +435,8 @@
 
 /* Batch Transcription */
 "Transcription Method" = "Transcription Method";
-"Real-time" = "Real-time";
-"After Recording" = "After Recording";
-"Show the transcript while recording. Audio files are not saved." = "Show the transcript while recording. Audio files are not saved.";
+"Enable Real-time Transcription" = "Enable Real-time Transcription";
+"Show the transcript while recording. Accuracy may be lower than transcription after recording, and audio files are not saved." = "Show the transcript while recording. Accuracy may be lower than transcription after recording, and audio files are not saved.";
 "Record audio first, then create a higher-accuracy transcript after recording stops." = "Record audio first, then create a higher-accuracy transcript after recording stops.";
 "Keep Audio After Transcription" = "Keep Audio After Transcription";
 "Keep the CAF audio files in the vault after batch transcription succeeds." = "Keep the CAF audio files in the vault after batch transcription succeeds.";
