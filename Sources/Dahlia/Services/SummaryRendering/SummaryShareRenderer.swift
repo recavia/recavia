@@ -204,7 +204,7 @@ enum SummaryShareRenderer {
         case let .numberedList(items):
             htmlList(items.map(\.text), kind: .numbered)
         case let .checklist(items):
-            htmlChecklist(items, destination: destination)
+            htmlChecklist(items)
         case let .quote(text):
             htmlParagraph(text.text, destination: destination).map { "<blockquote>\($0)</blockquote>" }
         case let .code(_, content):
@@ -251,23 +251,12 @@ enum SummaryShareRenderer {
         return wrapHTMLList(renderedItems.map { "<li>\($0)</li>" }, element: kind.element)
     }
 
-    private static func htmlChecklist(_ items: [SummaryBlock.ChecklistItem], destination: Destination) -> String? {
-        let renderedItems = items.compactMap { item -> (html: String, checked: Bool)? in
-            guard let text = normalizedInlineMarkdown(item.text.text).nilIfBlank else { return nil }
-            return (renderInlineHTML(text), item.checked)
+    private static func htmlChecklist(_ items: [SummaryBlock.ChecklistItem]) -> String? {
+        let renderedItems = items.compactMap { item -> String? in
+            normalizedInlineMarkdown(item.text.text).nilIfBlank.map(renderInlineHTML)
         }
         guard !renderedItems.isEmpty else { return nil }
-
-        switch destination {
-        case .googleDocs:
-            let listItems = renderedItems.map { item in
-                let marker = item.checked ? "☑" : "☐"
-                return "<li>\(marker) \(item.html)</li>"
-            }
-            return wrapHTMLList(listItems, element: "ul")
-        case .slack:
-            return wrapHTMLList(renderedItems.map { "<li>\($0.html)</li>" }, element: "ul")
-        }
+        return wrapHTMLList(renderedItems.map { "<li>\($0)</li>" }, element: "ul")
     }
 
     private static func wrapHTMLList(_ renderedItems: [String], element: String) -> String {
@@ -321,7 +310,7 @@ enum SummaryShareRenderer {
 
         switch destination {
         case .googleDocs:
-            let list = wrapHTMLList(renderedItems.map { "<li>☐ \($0)</li>" }, element: "ul")
+            let list = wrapHTMLList(renderedItems.map { "<li>\($0)</li>" }, element: "ul")
             return "<section>\n\(heading)\n\(list)\n</section>"
         case .slack:
             let list = wrapHTMLList(renderedItems.map { "<li>\($0)</li>" }, element: "ul")

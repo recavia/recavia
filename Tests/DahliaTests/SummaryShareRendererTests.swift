@@ -57,9 +57,11 @@ import Foundation
             #expect(content.html.contains("<a href=\"https://example.com?a=1&amp;b=2\">docs</a>"))
             #expect(content.html.contains("<ul>"))
             #expect(content.html.contains("<ol>"))
-            #expect(content.html.contains("<li>☐ Follow up</li>"))
+            #expect(content.html.contains("<li>Follow up</li>"))
             #expect(content.html.contains("<blockquote><p>Keep launch small</p></blockquote>"))
             #expect(content.html.contains("<pre><code>let enabled = true</code></pre>"))
+            #expect(!content.html.contains("☑"))
+            #expect(!content.html.contains("☐"))
 
             #expect(!content.markdown.contains("00:10:00"))
             #expect(!content.markdown.contains("00:11:00"))
@@ -145,8 +147,9 @@ import Foundation
             """)
             #expect(content.html.contains("<h1>Review &lt;Draft&gt;</h1>"))
             #expect(content.html.contains("<h2>Action Items</h2>"))
-            #expect(content.html.contains("<li>☐ Send <strong>proposal</strong> (Aki &amp; Ren)</li>"))
-            #expect(content.html.contains("<li>☐ Schedule review</li>"))
+            #expect(content.html.contains("<li>Send <strong>proposal</strong> (Aki &amp; Ren)</li>"))
+            #expect(content.html.contains("<li>Schedule review</li>"))
+            #expect(!content.html.contains("☐"))
         }
 
         @MainActor
