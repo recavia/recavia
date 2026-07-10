@@ -4,6 +4,11 @@
 
     struct TranscriptionSessionPlanTests {
         @Test
+        func batchIsTheDefaultTranscriptionMode() {
+            #expect(TranscriptionMode.defaultMode == .batch)
+        }
+
+        @Test
         func capabilitiesCoverAllModeAndSubtitleCombinations() {
             let realtimeWithoutSubtitles = TranscriptionSessionPlan(
                 finalMode: .realtime,

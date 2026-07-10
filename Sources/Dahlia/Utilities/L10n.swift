@@ -343,10 +343,9 @@ enum L10n {
         bundle: bundle
     ) }
     static var transcriptionMethod: String { String(localized: "Transcription Method", bundle: bundle) }
-    static var realtimeTranscription: String { String(localized: "Real-time", bundle: bundle) }
-    static var batchTranscription: String { String(localized: "After Recording", bundle: bundle) }
+    static var enableRealtimeTranscription: String { String(localized: "Enable Real-time Transcription", bundle: bundle) }
     static var realtimeTranscriptionDescription: String { String(
-        localized: "Show the transcript while recording. Audio files are not saved.",
+        localized: "Show the transcript while recording. Accuracy may be lower than transcription after recording, and audio files are not saved.",
         bundle: bundle
     ) }
     static var batchTranscriptionDescription: String { String(

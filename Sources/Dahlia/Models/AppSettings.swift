@@ -110,7 +110,7 @@ final class AppSettings: ObservableObject {
     // MARK: - 音声認識設定
 
     @AppStorage("transcriptionLocale") var transcriptionLocale: String = Locale.current.identifier
-    @AppStorage(TranscriptionMode.userDefaultsKey) var transcriptionModeRawValue = TranscriptionMode.realtime.rawValue
+    @AppStorage(TranscriptionMode.userDefaultsKey) var transcriptionModeRawValue = TranscriptionMode.defaultMode.rawValue
     @AppStorage("retainAudioAfterBatchTranscription") var retainAudioAfterBatchTranscription = false
     @AppStorage("transcriptTranslationEnabled") var transcriptTranslationEnabled = true
     @AppStorage("transcriptTranslationTargetLanguage") var transcriptTranslationTargetLanguage = TranscriptTranslationLanguage.defaultIdentifier
@@ -124,8 +124,13 @@ final class AppSettings: ObservableObject {
         AppSettings.defaultAutomaticScreenshotChangeThresholdPercent
 
     var transcriptionMode: TranscriptionMode {
-        get { TranscriptionMode(rawValue: transcriptionModeRawValue) ?? .realtime }
+        get { TranscriptionMode(rawValue: transcriptionModeRawValue) ?? .defaultMode }
         set { transcriptionModeRawValue = newValue.rawValue }
+    }
+
+    var isRealtimeTranscriptionEnabled: Bool {
+        get { transcriptionMode == .realtime }
+        set { transcriptionMode = newValue ? .realtime : .batch }
     }
 
     var automaticScreenshotIntervalSeconds: Int {
