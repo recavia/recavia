@@ -13,9 +13,14 @@ final class MeetingPersistenceService {
     private var persistedSegmentIds: Set<UUID> = []
     private var persistedSegmentTranslations: [UUID: String?] = [:]
     private var recordingSession: RecordingSessionRecord
+    private let createsMeeting: Bool
 
     var recordingSessionId: UUID {
         recordingSession.id
+    }
+
+    private var isRealtime: Bool {
+        recordingSession.transcriptionMode == .realtime
     }
 
     /// 新規ミーティングを作成して録音を開始する。
@@ -26,22 +31,23 @@ final class MeetingPersistenceService {
         projectId: UUID?,
         initialName: String,
         calendarEvent: CalendarEvent? = nil,
-        recordingSessionId: UUID = .v7()
+        recordingSessionId: UUID = .v7(),
+        transcriptionMode: TranscriptionMode = .realtime,
+        retainAudioAfterBatch: Bool = false
     ) throws {
         self.store = store
         self.dbQueue = dbQueue
         self.meetingId = .v7()
+        self.createsMeeting = true
 
         let now = store.recordingStartTime ?? Date()
-        let session = RecordingSessionRecord(
+        let session = Self.makeRecordingSession(
             id: recordingSessionId,
             meetingId: meetingId,
             startedAt: now,
-            endedAt: nil,
-            duration: nil,
             offsetSeconds: 0,
-            createdAt: now,
-            updatedAt: now
+            transcriptionMode: transcriptionMode,
+            retainAudioAfterBatch: retainAudioAfterBatch
         )
         self.recordingSession = session
         let trimmedInitialName = initialName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -51,7 +57,7 @@ final class MeetingPersistenceService {
             vaultId: vaultId,
             projectId: projectId,
             name: trimmedInitialName,
-            status: .ready,
+            status: transcriptionMode == .realtime ? .ready : .transcriptNotFound,
             createdAt: now,
             updatedAt: now
         )
@@ -75,21 +81,22 @@ final class MeetingPersistenceService {
         existingSegmentIds: Set<UUID>,
         recordingStartDate: Date = Date(),
         recordingOffsetSeconds: TimeInterval = 0,
-        recordingSessionId: UUID = .v7()
+        recordingSessionId: UUID = .v7(),
+        transcriptionMode: TranscriptionMode = .realtime,
+        retainAudioAfterBatch: Bool = false
     ) throws {
         self.store = store
         self.dbQueue = dbQueue
         self.meetingId = existingMeetingId
+        self.createsMeeting = false
         self.persistedSegmentIds = existingSegmentIds
-        let session = RecordingSessionRecord(
+        let session = Self.makeRecordingSession(
             id: recordingSessionId,
             meetingId: existingMeetingId,
             startedAt: recordingStartDate,
-            endedAt: nil,
-            duration: nil,
             offsetSeconds: recordingOffsetSeconds,
-            createdAt: recordingStartDate,
-            updatedAt: recordingStartDate
+            transcriptionMode: transcriptionMode,
+            retainAudioAfterBatch: retainAudioAfterBatch
         )
         self.recordingSession = session
 
@@ -101,6 +108,7 @@ final class MeetingPersistenceService {
     }
 
     private func startObserving() {
+        guard isRealtime else { return }
         cancellable = store.$segments
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
             .sink { [weak self] segments in
@@ -144,27 +152,43 @@ final class MeetingPersistenceService {
     /// 監視を停止し、最終保存とミーティング完了の記録を行う。
     func stop() {
         cancellable = nil
-        persistNewConfirmedSegments(store.segments)
+        if isRealtime {
+            persistNewConfirmedSegments(store.segments)
+        }
 
-        let now = Date()
+        let now = Date.now
         let duration = max(0, now.timeIntervalSince(recordingSession.startedAt))
         recordingSession.endedAt = now
         recordingSession.duration = duration
         recordingSession.updatedAt = now
 
-        try? dbQueue.write { db in
-            try recordingSession.update(db)
+        let persistedSession = try? dbQueue.write { db -> RecordingSessionRecord? in
+            // バッチ処理が先に記録したエラーや試行情報を、録音開始時点の値で上書きしない。
+            try db.execute(
+                sql: """
+                UPDATE recording_sessions
+                SET endedAt = ?, duration = ?, updatedAt = ?
+                WHERE id = ?
+                """,
+                arguments: [now, duration, now, recordingSession.id]
+            )
             let totalDuration = try Double.fetchOne(
                 db,
                 sql: "SELECT COALESCE(SUM(duration), 0) FROM recording_sessions WHERE meetingId = ?",
                 arguments: [meetingId]
             ) ?? duration
             if var record = try MeetingRecord.fetchOne(db, key: meetingId) {
-                record.status = .ready
+                if isRealtime {
+                    record.status = .ready
+                }
                 record.duration = totalDuration
                 record.updatedAt = now
                 try record.update(db)
             }
+            return try RecordingSessionRecord.fetchOne(db, key: recordingSession.id)
+        }
+        if let persistedSession {
+            recordingSession = persistedSession
         }
         store.upsertRecordingSession(RecordingSessionTimeline(from: recordingSession))
     }
@@ -173,5 +197,42 @@ final class MeetingPersistenceService {
     func reset() {
         persistedSegmentIds.removeAll()
         startObserving()
+    }
+
+    /// 録音開始に失敗したセッションを取り消す。
+    func cancel() {
+        cancellable = nil
+        let sessionId = recordingSession.id
+        let meetingId = meetingId
+        let createsMeeting = createsMeeting
+        try? dbQueue.write { db in
+            if createsMeeting {
+                _ = try MeetingRecord.deleteOne(db, key: meetingId)
+            } else {
+                _ = try RecordingSessionRecord.deleteOne(db, key: sessionId)
+            }
+        }
+    }
+
+    private static func makeRecordingSession(
+        id: UUID,
+        meetingId: UUID,
+        startedAt: Date,
+        offsetSeconds: TimeInterval,
+        transcriptionMode: TranscriptionMode,
+        retainAudioAfterBatch: Bool
+    ) -> RecordingSessionRecord {
+        RecordingSessionRecord(
+            id: id,
+            meetingId: meetingId,
+            startedAt: startedAt,
+            endedAt: nil,
+            duration: nil,
+            offsetSeconds: offsetSeconds,
+            createdAt: startedAt,
+            updatedAt: startedAt,
+            transcriptionMode: transcriptionMode,
+            retainAudioAfterBatch: retainAudioAfterBatch
+        )
     }
 }

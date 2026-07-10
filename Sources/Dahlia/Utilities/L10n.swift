@@ -234,6 +234,31 @@ enum L10n {
     static var notesPlaceholder: String { String(localized: "NotesPlaceholder", bundle: bundle) }
     static var screenshots: String { String(localized: "Screenshots", bundle: bundle) }
     static var transcript: String { String(localized: "Transcript", bundle: bundle) }
+    static var transcriptEmpty: String { String(localized: "No transcript yet.", bundle: bundle) }
+    static var batchRecordingInProgress: String { String(localized: "Recording audio for transcription after recording stops…", bundle: bundle) }
+    static var batchTranscriptionQueued: String { String(localized: "Waiting to transcribe the recording…", bundle: bundle) }
+    static var batchTranscriptionRunning: String { String(localized: "Creating a high-accuracy transcript…", bundle: bundle) }
+    static var batchTranscriptionCompleted: String { String(localized: "High-accuracy transcription completed.", bundle: bundle) }
+    static func batchTranscriptionFailed(_ reason: String) -> String {
+        String(localized: "Batch transcription failed: \(reason)", bundle: bundle)
+    }
+
+    static var retryBatchTranscription: String { String(localized: "Retry Batch Transcription", bundle: bundle) }
+    static var discardFailedBatchRecording: String { String(localized: "Discard Failed Recording", bundle: bundle) }
+    static var discardFailedBatchRecordingConfirmation: String { String(localized: "Discard this failed recording?", bundle: bundle) }
+    static var discardFailedBatchRecordingDescription: String { String(
+        localized: "The untranscribed audio will be deleted. Existing transcript content will be kept.",
+        bundle: bundle
+    ) }
+    static var cancel: String { String(localized: "Cancel", bundle: bundle) }
+    static var batchAudioBufferInvalid: String { String(localized: "The recorded audio format is invalid.", bundle: bundle) }
+    static func batchAudioWriteFailed(_ reason: String) -> String {
+        String(localized: "Could not save the recording: \(reason)", bundle: bundle)
+    }
+
+    static var batchAudioFormatUnavailable: String { String(localized: "No compatible audio format is available.", bundle: bundle) }
+    static var batchAudioRangeInvalid: String { String(localized: "The recorded audio range is invalid or damaged.", bundle: bundle) }
+    static var batchAnalysisDidNotAdvance: String { String(localized: "Speech analysis could not read the recorded audio.", bundle: bundle) }
     static var assignee: String { String(localized: "Assignee", bundle: bundle) }
     static var assignToMe: String { String(localized: "Assign to me", bundle: bundle) }
     static var editAssignee: String { String(localized: "Edit assignee", bundle: bundle) }
@@ -276,6 +301,22 @@ enum L10n {
     ) }
     static var transcriptionSettingsDescription: String { String(
         localized: "Choose which languages appear when starting transcription.",
+        bundle: bundle
+    ) }
+    static var transcriptionMethod: String { String(localized: "Transcription Method", bundle: bundle) }
+    static var realtimeTranscription: String { String(localized: "Real-time", bundle: bundle) }
+    static var batchTranscription: String { String(localized: "After Recording", bundle: bundle) }
+    static var realtimeTranscriptionDescription: String { String(
+        localized: "Show the transcript while recording. Audio files are not saved.",
+        bundle: bundle
+    ) }
+    static var batchTranscriptionDescription: String { String(
+        localized: "Record audio first, then create a higher-accuracy transcript after recording stops.",
+        bundle: bundle
+    ) }
+    static var retainBatchAudio: String { String(localized: "Keep Audio After Transcription", bundle: bundle) }
+    static var retainBatchAudioDescription: String { String(
+        localized: "Keep the CAF audio files in the vault after batch transcription succeeds.",
         bundle: bundle
     ) }
     static var transcriptTranslation: String { String(localized: "Transcript Translation", bundle: bundle) }

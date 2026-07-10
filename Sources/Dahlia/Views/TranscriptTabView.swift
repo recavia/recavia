@@ -21,6 +21,9 @@ struct TranscriptTabView: View {
     let isListening: Bool
     let showsRecordingIndicator: Bool
     let showsTranslatedText: Bool
+    let batchTranscriptionState: BatchTranscriptionState?
+    let retryBatchTranscription: () -> Void
+    let discardFailedBatchTranscription: () -> Void
 
     @State private var shouldFollowLatest = true
     @State private var windowSize = WindowMetrics.initialWindowSize
@@ -49,12 +52,20 @@ struct TranscriptTabView: View {
     }
 
     var body: some View {
-        Group {
-            if store.segments.isEmpty, !isListening {
+        VStack(spacing: 0) {
+            if let batchTranscriptionState {
+                BatchTranscriptionStatusView(
+                    state: batchTranscriptionState,
+                    retry: retryBatchTranscription,
+                    discard: discardFailedBatchTranscription
+                )
+            }
+
+            if store.segments.isEmpty, !isListening || batchTranscriptionState != nil {
                 ContentUnavailableView {
                     Label(L10n.transcript, systemImage: "waveform.badge.microphone")
                 } description: {
-                    Text("文字起こしはまだありません")
+                    Text(L10n.transcriptEmpty)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

@@ -36,6 +36,20 @@ private struct RecordingContext {
     let projectName: String?
     let vaultURL: URL?
     let dbQueue: DatabaseQueue?
+    let batchTranscriptionState: BatchTranscriptionState?
+}
+
+private struct PersistenceStartRequest {
+    let dbQueue: DatabaseQueue
+    let vaultId: UUID
+    let projectId: UUID?
+    let existingMeetingId: UUID?
+    let appendContext: MeetingRepository.AppendRecordingContext?
+    let recordingStartTime: Date
+    let recordingSessionId: UUID
+    let transcriptionMode: TranscriptionMode
+    let retainAudioAfterBatch: Bool
+    let draftMeeting: DraftMeeting?
 }
 
 /// 音声キャプチャ → Speech フレームワーク文字起こし → UI 更新を統括するビューモデル。
@@ -54,6 +68,8 @@ final class CaptionViewModel: ObservableObject {
     @Published var isFinalizingRecording = false
     @Published var analyzerReady = false
     @Published var isPreparingAnalyzer = false
+    @Published private(set) var activeTranscriptionMode: TranscriptionMode?
+    @Published private(set) var batchTranscriptionState: BatchTranscriptionState?
     @Published var errorMessage: String?
     @Published var availableMicrophones: [MicrophoneDevice] = []
     @Published var microphoneSelection: MicrophoneSelection = .systemDefault
@@ -173,6 +189,10 @@ final class CaptionViewModel: ObservableObject {
     /// マイクが有効か。
     var isMicEnabled: Bool { selectedMicrophoneID != nil }
 
+    var isBatchRecording: Bool {
+        isListening && activeTranscriptionMode == .batch
+    }
+
     /// 少なくとも 1 つの音声ソースが有効か。
     var hasEnabledAudioSource: Bool { isMicEnabled || isSystemAudioEnabled }
 
@@ -213,6 +233,8 @@ final class CaptionViewModel: ObservableObject {
     private var systemAudioManager: SystemAudioCaptureManager?
     private var pipelines: [(service: SpeechTranscriberService, bridge: AudioBufferBridge)] = []
     private var persistenceService: MeetingPersistenceService?
+    private var batchAudioRecordingSession: BatchAudioRecordingSession?
+    private var batchTranscriptionCoordinator: BatchTranscriptionCoordinator?
     private var settingsCancellable: AnyCancellable?
     private var storeSegmentsCancellable: AnyCancellable?
     private var transcriptionLocaleCancellable: AnyCancellable?
@@ -280,6 +302,87 @@ final class CaptionViewModel: ObservableObject {
                 self?.handleAutomaticScreenshotIntervalChange()
             }
             .store(in: &automaticScreenshotSettingsCancellables)
+    }
+
+    func configureBatchTranscription(dbQueue: DatabaseQueue) {
+        guard batchTranscriptionCoordinator == nil else { return }
+        let coordinator = BatchTranscriptionCoordinator(dbQueue: dbQueue) { [weak self] update in
+            await self?.handleBatchTranscriptionUpdate(update)
+        }
+        batchTranscriptionCoordinator = coordinator
+        Task {
+            await coordinator.recoverAndEnqueue()
+        }
+    }
+
+    func retryBatchTranscription() {
+        guard case let .failed(sessionId, _) = batchTranscriptionState,
+              let coordinator = batchTranscriptionCoordinator else { return }
+        batchTranscriptionState = .queued(sessionId: sessionId)
+        Task {
+            await coordinator.enqueue(sessionId: sessionId)
+        }
+    }
+
+    func discardFailedBatchTranscription() {
+        guard case let .failed(sessionId, _) = batchTranscriptionState,
+              let meetingId = currentMeetingId,
+              let dbQueue = currentDbQueue else { return }
+        Task {
+            do {
+                let repository = MeetingRepository(dbQueue: dbQueue)
+                guard try repository.discardFailedBatchSession(id: sessionId) else { return }
+                try refreshBatchTranscriptionState(meetingId: meetingId, dbQueue: dbQueue)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func refreshBatchTranscriptionState(meetingId: UUID, dbQueue: DatabaseQueue) throws {
+        let sessions = try dbQueue.read { db in
+            try RecordingSessionRecord
+                .filter(Column("meetingId") == meetingId)
+                .order(Column("startedAt").asc)
+                .fetchAll(db)
+        }
+        guard currentMeetingId == meetingId else { return }
+        batchTranscriptionState = sessions
+            .reversed()
+            .compactMap { BatchTranscriptionState.derive(from: $0) }
+            .first(where: \.blocksSummaryGeneration)
+    }
+
+    private func handleBatchTranscriptionUpdate(_ update: BatchTranscriptionUpdate) async {
+        guard currentMeetingId == update.meetingId,
+              !(isBatchRecording && recordingMeetingId == update.meetingId) else { return }
+        batchTranscriptionState = update.state
+        guard case .completed = update.state, !isListening else { return }
+        await reloadCurrentMeetingAfterBatchCompletion(meetingId: update.meetingId)
+    }
+
+    private func reloadCurrentMeetingAfterBatchCompletion(meetingId: UUID) async {
+        guard let dbQueue = currentDbQueue,
+              let vaultURL = currentVaultURL,
+              currentMeetingId == meetingId else { return }
+        let projectURL = currentProjectURL
+        do {
+            let loaded = try await Task.detached(priority: .userInitiated) {
+                try Self.fetchLoadedMeetingData(
+                    meetingId: meetingId,
+                    dbQueue: dbQueue,
+                    projectURL: projectURL,
+                    vaultURL: vaultURL
+                )
+            }.value
+            guard currentMeetingId == meetingId, !isListening else { return }
+            store.recordingStartTime = loaded.createdAt
+            store.loadRecordingSessions(loaded.recordingSessions)
+            store.loadSegments(loaded.segments)
+            applyLoadedDetail(loaded)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func bindStoreSegments() {
@@ -399,6 +502,7 @@ final class CaptionViewModel: ObservableObject {
 
     private struct LoadedMeetingData {
         let createdAt: Date?
+        let recordingSessionRecords: [RecordingSessionRecord]
         let recordingSessions: [RecordingSessionTimeline]
         let segments: [TranscriptSegment]
         let screenshots: [MeetingScreenshotRecord]
@@ -427,6 +531,7 @@ final class CaptionViewModel: ObservableObject {
 
         return LoadedMeetingData(
             createdAt: detail.meeting?.createdAt,
+            recordingSessionRecords: detail.recordingSessions,
             recordingSessions: recordingSessions,
             segments: segments,
             screenshots: detail.screenshots,
@@ -657,6 +762,7 @@ final class CaptionViewModel: ObservableObject {
         currentProjectName = nil
         currentVaultURL = nil
         draftMeeting = nil
+        batchTranscriptionState = nil
     }
 
     /// 録音対象のトランスクリプトに表示を復帰する。
@@ -673,6 +779,7 @@ final class CaptionViewModel: ObservableObject {
         currentProjectName = ctx.projectName
         currentVaultURL = ctx.vaultURL
         currentDbQueue = ctx.dbQueue
+        batchTranscriptionState = ctx.batchTranscriptionState
         draftMeeting = nil
 
         store = ctx.store
@@ -717,7 +824,20 @@ final class CaptionViewModel: ObservableObject {
         hasNote = loaded.note != nil
         currentNoteCreatedAt = loaded.note?.createdAt
         lastSavedNoteText = noteText
+        batchTranscriptionState = loaded.recordingSessionRecords
+            .reversed()
+            .compactMap { BatchTranscriptionState.derive(from: $0) }
+            .first(where: \.blocksSummaryGeneration)
         setupNoteAutoSave()
+
+        guard let coordinator = batchTranscriptionCoordinator,
+              let visibleState = batchTranscriptionState else { return }
+        Task {
+            if await coordinator.isRunning(sessionId: visibleState.sessionId),
+               batchTranscriptionState?.sessionId == visibleState.sessionId {
+                batchTranscriptionState = .running(sessionId: visibleState.sessionId)
+            }
+        }
     }
 
     // MARK: - Private Helpers
@@ -732,7 +852,8 @@ final class CaptionViewModel: ObservableObject {
             projectId: currentProjectId,
             projectName: currentProjectName,
             vaultURL: currentVaultURL,
-            dbQueue: currentDbQueue
+            dbQueue: currentDbQueue,
+            batchTranscriptionState: batchTranscriptionState
         )
     }
 
@@ -745,6 +866,7 @@ final class CaptionViewModel: ObservableObject {
         resetNoteState()
         resetSummaryState()
         draftMeeting = nil
+        batchTranscriptionState = nil
     }
 
     private func resetSummaryState() {
@@ -857,51 +979,76 @@ final class CaptionViewModel: ObservableObject {
     private func rebuildPipelines(reason: PipelineRebuildReason) async -> Bool {
         await stopActivePipelines()
         stopActiveCaptures()
-
-        let primaryLocale = resolvedSelectedLocale()
         do {
-            try await SpeechTranscriberService.ensureModelInstalled(locale: primaryLocale)
+            try await batchAudioRecordingSession?.endActiveRanges()
         } catch {
             setPipelineRebuildError(error, reason: reason)
             return false
         }
 
-        var sourceErrors: [Error] = []
-        let recordingStartTime = Date()
-        let recordingSessionId = persistenceService?.recordingSessionId ?? UUID.v7()
-
-        if isMicEnabled {
+        let primaryLocale = resolvedSelectedLocale()
+        let sourceError: Error?
+        if activeTranscriptionMode == .batch {
+            sourceError = await firstAudioSourceError(
+                startMicrophone: { try await self.startMicrophoneBatchCapture(locale: primaryLocale) },
+                startSystemAudio: { try await self.startSystemAudioBatchCapture(locale: primaryLocale) }
+            )
+        } else {
             do {
-                try await startMicrophonePipeline(
-                    locale: primaryLocale,
-                    recordingStartTime: recordingStartTime,
-                    recordingSessionId: recordingSessionId
-                )
+                try await SpeechTranscriberService.ensureModelInstalled(locale: primaryLocale)
             } catch {
-                sourceErrors.append(error)
+                setPipelineRebuildError(error, reason: reason)
+                return false
             }
+            let recordingStartTime = Date.now
+            let recordingSessionId = persistenceService?.recordingSessionId ?? .v7()
+            sourceError = await firstAudioSourceError(
+                startMicrophone: {
+                    try await self.startMicrophonePipeline(
+                        locale: primaryLocale,
+                        recordingStartTime: recordingStartTime,
+                        recordingSessionId: recordingSessionId
+                    )
+                },
+                startSystemAudio: {
+                    try await self.startSystemAudioPipeline(
+                        locale: primaryLocale,
+                        recordingStartTime: recordingStartTime,
+                        recordingSessionId: recordingSessionId
+                    )
+                }
+            )
+            analyzerReady = true
         }
 
-        if isSystemAudioEnabled {
-            do {
-                try await startSystemAudioPipeline(
-                    locale: primaryLocale,
-                    recordingStartTime: recordingStartTime,
-                    recordingSessionId: recordingSessionId
-                )
-            } catch {
-                sourceErrors.append(error)
-            }
-        }
-
-        analyzerReady = true
-        if let firstError = sourceErrors.first {
-            setPipelineRebuildError(firstError, reason: reason)
+        if let sourceError {
+            setPipelineRebuildError(sourceError, reason: reason)
             return false
         }
-
         errorMessage = nil
         return true
+    }
+
+    private func firstAudioSourceError(
+        startMicrophone: () async throws -> Void,
+        startSystemAudio: () async throws -> Void
+    ) async -> Error? {
+        var errors: [Error] = []
+        if isMicEnabled {
+            do {
+                try await startMicrophone()
+            } catch {
+                errors.append(error)
+            }
+        }
+        if isSystemAudioEnabled {
+            do {
+                try await startSystemAudio()
+            } catch {
+                errors.append(error)
+            }
+        }
+        return errors.first
     }
 
     private func setPipelineRebuildError(_ error: Error, reason: PipelineRebuildReason) {
@@ -963,6 +1110,214 @@ final class CaptionViewModel: ObservableObject {
         pipelines.append((service: service, bridge: bridge))
     }
 
+    private func startMicrophoneBatchCapture(locale: Locale) async throws {
+        let hasMicPermission = await AudioCaptureManager.requestMicrophonePermission()
+        guard hasMicPermission else {
+            throw AudioCaptureError.microphonePermissionDenied
+        }
+        guard let batchAudioRecordingSession else {
+            throw BatchAudioFileWriterError.incompatibleBuffer
+        }
+        let writer = try await batchAudioRecordingSession.beginRange(source: .microphone, locale: locale)
+        let manager = AudioCaptureManager()
+        manager.onAudioBuffer = { [writer] buffer in
+            writer.appendBuffer(buffer)
+        }
+        try manager.startCapture(
+            targetFormat: batchAudioRecordingSession.targetFormat,
+            selectedDeviceID: selectedMicrophoneID,
+            bufferSize: 1024
+        )
+        audioManager = manager
+    }
+
+    private func startSystemAudioBatchCapture(locale: Locale) async throws {
+        let hasPermission = await SystemAudioCaptureManager.requestPermission()
+        guard hasPermission else {
+            throw SystemAudioCaptureError.screenRecordingPermissionDenied
+        }
+        guard let batchAudioRecordingSession else {
+            throw BatchAudioFileWriterError.incompatibleBuffer
+        }
+        let writer = try await batchAudioRecordingSession.beginRange(source: .system, locale: locale)
+        let manager = SystemAudioCaptureManager()
+        manager.onAudioBuffer = { [writer] buffer in
+            writer.appendBuffer(buffer)
+        }
+        manager.onStreamStopped = { [weak self] error in
+            Task { @MainActor in
+                self?.errorMessage = error?.localizedDescription ?? L10n.systemAudioCaptureStopped
+                if self?.audioManager == nil {
+                    self?.stopListening()
+                }
+            }
+        }
+        try await manager.startCapture(targetFormat: batchAudioRecordingSession.targetFormat)
+        systemAudioManager = manager
+    }
+
+    private func prepareRecordingStart(
+        existingMeetingId: UUID?,
+        dbQueue: DatabaseQueue,
+        recordingStartTime: Date
+    ) -> MeetingRepository.AppendRecordingContext? {
+        pipelines.removeAll()
+        persistenceService = nil
+        batchAudioRecordingSession = nil
+        stopAutomaticScreenshotCapture()
+
+        guard let existingMeetingId else {
+            store.recordingStartTime = recordingStartTime
+            return nil
+        }
+
+        let repository = MeetingRepository(dbQueue: dbQueue)
+        let context = try? repository.fetchAppendRecordingContext(forMeetingId: existingMeetingId)
+        if let sessions = context?.recordingSessions, !sessions.isEmpty {
+            store.loadRecordingSessions(sessions.map(RecordingSessionTimeline.init))
+        }
+        guard store.recordingStartTime == nil else { return context }
+        if let firstSegmentStartTime = context?.firstSegmentStartTime {
+            store.recordingStartTime = context?.meetingCreatedAt ?? firstSegmentStartTime
+        } else {
+            store.recordingStartTime = recordingStartTime
+            try? repository.updateMeetingCreatedAt(id: existingMeetingId, createdAt: recordingStartTime)
+        }
+        return context
+    }
+
+    private func prepareCapture(
+        mode: TranscriptionMode,
+        locale: Locale,
+        recordingStartTime: Date,
+        recordingSessionId: UUID
+    ) async throws -> Double? {
+        guard mode == .realtime else {
+            return try await BatchSpeechTranscriberService.preferredSampleRate(locale: locale)
+        }
+
+        try await SpeechTranscriberService.ensureModelInstalled(locale: locale)
+        if isMicEnabled {
+            try await startMicrophonePipeline(
+                locale: locale,
+                recordingStartTime: recordingStartTime,
+                recordingSessionId: recordingSessionId
+            )
+        }
+        if isSystemAudioEnabled {
+            try await startSystemAudioPipeline(
+                locale: locale,
+                recordingStartTime: recordingStartTime,
+                recordingSessionId: recordingSessionId
+            )
+        }
+        return nil
+    }
+
+    private func startBatchRecordingIfNeeded(
+        sampleRate: Double?,
+        dbQueue: DatabaseQueue,
+        meetingId: UUID?,
+        recordingSessionId: UUID,
+        recordingStartTime: Date,
+        locale: Locale
+    ) async throws {
+        guard let sampleRate, let meetingId else { return }
+        let recordingSession = try BatchAudioRecordingSession(
+            dbQueue: dbQueue,
+            meetingId: meetingId,
+            recordingSessionId: recordingSessionId,
+            recordingStartTime: recordingStartTime,
+            sampleRate: sampleRate
+        )
+        batchAudioRecordingSession = recordingSession
+        if isMicEnabled {
+            try await startMicrophoneBatchCapture(locale: locale)
+        }
+        if isSystemAudioEnabled {
+            try await startSystemAudioBatchCapture(locale: locale)
+        }
+        batchTranscriptionState = .recording(sessionId: recordingSessionId)
+    }
+
+    private func canStartRecording() -> Bool {
+        guard analyzerReady else {
+            errorMessage = L10n.speechRecognitionNotReady
+            return false
+        }
+        guard hasEnabledAudioSource else {
+            errorMessage = L10n.noAudioSourceSelected
+            return false
+        }
+        return true
+    }
+
+    private func markRecordingStarted() {
+        isListening = true
+        errorMessage = nil
+        syncAutomaticScreenshotCaptureState()
+    }
+
+    private func startPersistence(_ request: PersistenceStartRequest) throws {
+        if let existingMeetingId = request.existingMeetingId {
+            persistenceService = try MeetingPersistenceService(
+                store: store,
+                dbQueue: request.dbQueue,
+                existingMeetingId: existingMeetingId,
+                existingSegmentIds: request.appendContext?.segmentIds ?? [],
+                recordingStartDate: request.recordingStartTime,
+                recordingOffsetSeconds: request.appendContext?.nextOffsetSeconds ?? 0,
+                recordingSessionId: request.recordingSessionId,
+                transcriptionMode: request.transcriptionMode,
+                retainAudioAfterBatch: request.retainAudioAfterBatch
+            )
+            currentMeetingId = existingMeetingId
+            return
+        }
+
+        let initialName = request.draftMeeting?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        persistenceService = try MeetingPersistenceService(
+            store: store,
+            dbQueue: request.dbQueue,
+            vaultId: request.vaultId,
+            projectId: request.projectId,
+            initialName: initialName,
+            calendarEvent: request.draftMeeting?.linkedCalendarEvent,
+            recordingSessionId: request.recordingSessionId,
+            transcriptionMode: request.transcriptionMode,
+            retainAudioAfterBatch: request.retainAudioAfterBatch
+        )
+        currentMeetingId = persistenceService?.meetingId
+    }
+
+    private func completePersistenceStart(existingMeetingId: UUID?) {
+        guard existingMeetingId == nil else { return }
+        draftMeeting = nil
+        setupNoteAutoSave()
+        saveNoteImmediately()
+    }
+
+    private func handleRecordingStartFailure(
+        _ error: Error,
+        existingMeetingId: UUID?,
+        previousBatchTranscriptionState: BatchTranscriptionState?
+    ) async {
+        errorMessage = error.localizedDescription
+        ErrorReportingService.capture(error, context: ["source": "startListening"])
+        await stopActivePipelines()
+        stopActiveCaptures()
+        stopAutomaticScreenshotCapture()
+        await batchAudioRecordingSession?.cancelAndDelete()
+        batchAudioRecordingSession = nil
+        persistenceService?.cancel()
+        persistenceService = nil
+        activeTranscriptionMode = nil
+        batchTranscriptionState = previousBatchTranscriptionState
+        if existingMeetingId == nil {
+            currentMeetingId = nil
+        }
+    }
+
     // MARK: - Recording Control
 
     func toggleListening(
@@ -1002,6 +1357,7 @@ final class CaptionViewModel: ObservableObject {
         appendingTo existingMeetingId: UUID? = nil
     ) async {
         guard !isListening, !isFinalizingRecording else { return }
+        let previousBatchTranscriptionState = batchTranscriptionState
 
         self.currentProjectURL = projectURL
         self.currentProjectId = projectId
@@ -1010,102 +1366,60 @@ final class CaptionViewModel: ObservableObject {
         self.currentDbQueue = dbQueue
         resetSummaryState()
         let activeDraftMeeting = draftMeeting
-        guard analyzerReady else {
-            errorMessage = L10n.speechRecognitionNotReady
-            return
-        }
+        guard canStartRecording() else { return }
 
-        guard hasEnabledAudioSource else {
-            errorMessage = L10n.noAudioSourceSelected
-            return
-        }
-
-        pipelines.removeAll()
         let recordingStartTime = Date()
         let recordingSessionId = UUID.v7()
-        let appendContext: MeetingRepository.AppendRecordingContext?
-        if let existingMeetingId {
-            let repo = MeetingRepository(dbQueue: dbQueue)
-            appendContext = try? repo.fetchAppendRecordingContext(forMeetingId: existingMeetingId)
-            if let recordingSessions = appendContext?.recordingSessions, !recordingSessions.isEmpty {
-                store.loadRecordingSessions(recordingSessions.map(RecordingSessionTimeline.init))
-            }
-            if store.recordingStartTime == nil {
-                if let firstSegmentStartTime = appendContext?.firstSegmentStartTime {
-                    store.recordingStartTime = appendContext?.meetingCreatedAt ?? firstSegmentStartTime
-                } else {
-                    store.recordingStartTime = recordingStartTime
-                    try? repo.updateMeetingCreatedAt(id: existingMeetingId, createdAt: recordingStartTime)
-                }
-            }
-        } else {
-            appendContext = nil
-            store.recordingStartTime = recordingStartTime
-        }
-        persistenceService = nil
-        stopAutomaticScreenshotCapture()
-
+        let appendContext = prepareRecordingStart(
+            existingMeetingId: existingMeetingId,
+            dbQueue: dbQueue,
+            recordingStartTime: recordingStartTime
+        )
         do {
+            let transcriptionMode = AppSettings.shared.transcriptionMode
+            let retainAudioAfterBatch = transcriptionMode == .batch
+                && AppSettings.shared.retainAudioAfterBatchTranscription
+            activeTranscriptionMode = transcriptionMode
             let primaryLocale = resolvedSelectedLocale()
-            try await SpeechTranscriberService.ensureModelInstalled(locale: primaryLocale)
+            let batchSampleRate = try await prepareCapture(
+                mode: transcriptionMode,
+                locale: primaryLocale,
+                recordingStartTime: recordingStartTime,
+                recordingSessionId: recordingSessionId
+            )
 
-            if isMicEnabled {
-                try await startMicrophonePipeline(
-                    locale: primaryLocale,
-                    recordingStartTime: recordingStartTime,
-                    recordingSessionId: recordingSessionId
-                )
-            }
-            if isSystemAudioEnabled {
-                try await startSystemAudioPipeline(
-                    locale: primaryLocale,
-                    recordingStartTime: recordingStartTime,
-                    recordingSessionId: recordingSessionId
-                )
-            }
-
-            if let existingMeetingId {
-                // 追記モード: 既存セグメント ID を取得して PersistenceService に渡す
-                persistenceService = try MeetingPersistenceService(
-                    store: store,
-                    dbQueue: dbQueue,
-                    existingMeetingId: existingMeetingId,
-                    existingSegmentIds: appendContext?.segmentIds ?? [],
-                    recordingStartDate: recordingStartTime,
-                    recordingOffsetSeconds: appendContext?.nextOffsetSeconds ?? 0,
-                    recordingSessionId: recordingSessionId
-                )
-                currentMeetingId = existingMeetingId
-            } else {
-                let initialName = activeDraftMeeting?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                persistenceService = try MeetingPersistenceService(
-                    store: store,
+            try startPersistence(
+                PersistenceStartRequest(
                     dbQueue: dbQueue,
                     vaultId: vaultId,
                     projectId: projectId,
-                    initialName: initialName,
-                    calendarEvent: activeDraftMeeting?.linkedCalendarEvent,
-                    recordingSessionId: recordingSessionId
+                    existingMeetingId: existingMeetingId,
+                    appendContext: appendContext,
+                    recordingStartTime: recordingStartTime,
+                    recordingSessionId: recordingSessionId,
+                    transcriptionMode: transcriptionMode,
+                    retainAudioAfterBatch: retainAudioAfterBatch,
+                    draftMeeting: activeDraftMeeting
                 )
-                currentMeetingId = persistenceService?.meetingId
-                draftMeeting = nil
-                setupNoteAutoSave()
-                saveNoteImmediately()
-            }
+            )
 
-            self.isListening = true
-            self.errorMessage = nil
-            syncAutomaticScreenshotCaptureState()
+            try await startBatchRecordingIfNeeded(
+                sampleRate: batchSampleRate,
+                dbQueue: dbQueue,
+                meetingId: currentMeetingId,
+                recordingSessionId: recordingSessionId,
+                recordingStartTime: recordingStartTime,
+                locale: primaryLocale
+            )
+
+            completePersistenceStart(existingMeetingId: existingMeetingId)
+            markRecordingStarted()
         } catch {
-            self.errorMessage = error.localizedDescription
-            ErrorReportingService.capture(error, context: ["source": "startListening"])
-            await stopActivePipelines()
-            stopActiveCaptures()
-            stopAutomaticScreenshotCapture()
-            persistenceService = nil
-            if existingMeetingId == nil {
-                currentMeetingId = nil
-            }
+            await handleRecordingStartFailure(
+                error,
+                existingMeetingId: existingMeetingId,
+                previousBatchTranscriptionState: previousBatchTranscriptionState
+            )
         }
     }
 
@@ -1123,17 +1437,48 @@ final class CaptionViewModel: ObservableObject {
         let meetingId = ctx?.meetingId ?? currentMeetingId
         let projectName = ctx?.projectName ?? selectedProjectName
         let vaultURL = ctx?.vaultURL ?? currentVaultURL
+        let dbQueue = ctx?.dbQueue ?? currentDbQueue
         let recordingStart = activeStore.timeBase
+        let transcriptionMode = activeTranscriptionMode ?? .realtime
+        let recordingSessionId = persistenceService?.recordingSessionId
+        let batchRecordingSession = batchAudioRecordingSession
+        batchAudioRecordingSession = nil
         recordingContext = nil
 
         Task {
             await stopActivePipelines()
+            await finishBatchRecording(
+                batchRecordingSession,
+                recordingSessionId: recordingSessionId,
+                meetingId: meetingId
+            )
             persistenceService?.stop()
             persistenceService = nil
-            let segments = activeStore.segments
+            activeTranscriptionMode = nil
+            var segments = activeStore.segments
             let recordingSessions = activeStore.recordingSessions
             isFinalizingRecording = false
 
+            if transcriptionMode == .batch, let recordingSessionId {
+                await completeBatchRecording(
+                    sessionId: recordingSessionId,
+                    meetingId: meetingId,
+                    vaultURL: vaultURL,
+                    dbQueue: dbQueue
+                )
+                return
+            }
+
+            if let meetingId, let dbQueue {
+                segments = await mergedSegmentsForExport(
+                    meetingId: meetingId,
+                    dbQueue: dbQueue,
+                    activeSegments: segments
+                )
+                if currentMeetingId == meetingId {
+                    activeStore.loadSegments(segments)
+                }
+            }
             guard let vaultURL, let meetingId, !segments.isEmpty else { return }
             await exportFiles(
                 vaultURL: vaultURL,
@@ -1143,6 +1488,92 @@ final class CaptionViewModel: ObservableObject {
                 segments: segments,
                 recordingSessions: recordingSessions
             )
+        }
+    }
+
+    private func finishBatchRecording(
+        _ recordingSession: BatchAudioRecordingSession?,
+        recordingSessionId: UUID?,
+        meetingId: UUID?
+    ) async {
+        do {
+            try await recordingSession?.finish()
+        } catch {
+            if let recordingSessionId,
+               let coordinator = batchTranscriptionCoordinator {
+                await coordinator.recordRecordingFailure(sessionId: recordingSessionId, error: error)
+            }
+            if currentMeetingId == meetingId, let recordingSessionId {
+                batchTranscriptionState = .failed(
+                    sessionId: recordingSessionId,
+                    message: error.localizedDescription
+                )
+            }
+        }
+    }
+
+    private func completeBatchRecording(
+        sessionId: UUID,
+        meetingId: UUID?,
+        vaultURL: URL?,
+        dbQueue: DatabaseQueue?
+    ) async {
+        let recordingFailed = isFailedBatchState(for: sessionId)
+        if currentMeetingId == meetingId, !recordingFailed {
+            batchTranscriptionState = .queued(sessionId: sessionId)
+        }
+        if !recordingFailed, let coordinator = batchTranscriptionCoordinator {
+            await coordinator.enqueue(sessionId: sessionId)
+        }
+        if let vaultURL, let meetingId, let dbQueue {
+            await exportBatchScreenshots(
+                vaultURL: vaultURL,
+                meetingId: meetingId,
+                dbQueue: dbQueue
+            )
+        }
+    }
+
+    private func isFailedBatchState(for sessionId: UUID) -> Bool {
+        guard case let .failed(failedSessionId, _) = batchTranscriptionState else { return false }
+        return failedSessionId == sessionId
+    }
+
+    private func exportBatchScreenshots(vaultURL: URL, meetingId: UUID, dbQueue: DatabaseQueue) async {
+        let screenshots = await Task.detached(priority: .utility) {
+            let repository = MeetingRepository(dbQueue: dbQueue)
+            return (try? repository.fetchScreenshots(forMeetingId: meetingId)) ?? []
+        }.value
+        guard !screenshots.isEmpty else { return }
+        _ = await Task.detached(priority: .utility) {
+            try? ScreenshotExportService.exportScreenshots(
+                vaultURL: vaultURL,
+                screenshots: screenshots
+            )
+        }.value
+    }
+
+    private func mergedSegmentsForExport(
+        meetingId: UUID,
+        dbQueue: DatabaseQueue,
+        activeSegments: [TranscriptSegment]
+    ) async -> [TranscriptSegment] {
+        let persistedSegments = await (try? dbQueue.read { db in
+            try TranscriptSegmentRecord
+                .filter(Column("meetingId") == meetingId)
+                .order(Column("startTime").asc)
+                .fetchAll(db)
+                .map(TranscriptSegment.init(from:))
+        }) ?? []
+        var segmentsById = Dictionary(uniqueKeysWithValues: persistedSegments.map { ($0.id, $0) })
+        for segment in activeSegments {
+            segmentsById[segment.id] = segment
+        }
+        return segmentsById.values.sorted { lhs, rhs in
+            if lhs.startTime == rhs.startTime {
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+            return lhs.startTime < rhs.startTime
         }
     }
 
@@ -1158,7 +1589,8 @@ final class CaptionViewModel: ObservableObject {
         guard !isListening,
               !isFinalizingRecording,
               currentMeetingId != nil,
-              currentVaultURL != nil else { return false }
+              currentVaultURL != nil,
+              batchTranscriptionState?.blocksSummaryGeneration != true else { return false }
         return !store.segments.isEmpty
     }
 

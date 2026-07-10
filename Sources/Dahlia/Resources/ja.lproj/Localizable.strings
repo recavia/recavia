@@ -408,3 +408,28 @@
 "Change Folder" = "フォルダを変更";
 "Select This Folder" = "このフォルダを選択";
 "The summary was saved locally, but uploading to Google Drive failed." = "要約はローカルに保存されましたが、Google Drive へのアップロードに失敗しました。";
+
+/* Batch Transcription */
+"Transcription Method" = "文字起こし方式";
+"Real-time" = "リアルタイム";
+"After Recording" = "録音後に処理";
+"Show the transcript while recording. Audio files are not saved." = "録音中に文字起こしを表示します。音声ファイルは保存しません。";
+"Record audio first, then create a higher-accuracy transcript after recording stops." = "先に音声を録音し、録音終了後に高精度な文字起こしを作成します。";
+"Keep Audio After Transcription" = "文字起こし後も音声を残す";
+"Keep the CAF audio files in the vault after batch transcription succeeds." = "バッチ文字起こし成功後もCAF音声ファイルを保管庫に残します。";
+"No transcript yet." = "文字起こしはまだありません。";
+"Recording audio for transcription after recording stops…" = "録音終了後の文字起こし用に音声を保存しています…";
+"Waiting to transcribe the recording…" = "録音の文字起こしを待機しています…";
+"Creating a high-accuracy transcript…" = "高精度な文字起こしを作成しています…";
+"High-accuracy transcription completed." = "高精度な文字起こしが完了しました。";
+"Batch transcription failed: %@" = "バッチ文字起こしに失敗しました: %@";
+"Retry Batch Transcription" = "バッチ文字起こしを再試行";
+"Discard Failed Recording" = "失敗した録音を破棄";
+"Discard this failed recording?" = "失敗した録音を破棄しますか？";
+"The untranscribed audio will be deleted. Existing transcript content will be kept." = "文字起こしできなかった音声を削除します。既存の文字起こし内容は保持されます。";
+"Cancel" = "キャンセル";
+"The recorded audio format is invalid." = "録音音声の形式が不正です。";
+"Could not save the recording: %@" = "録音を保存できませんでした: %@";
+"No compatible audio format is available." = "互換性のある音声形式を利用できません。";
+"The recorded audio range is invalid or damaged." = "録音音声の範囲が不正または破損しています。";
+"Speech analysis could not read the recorded audio." = "音声解析で録音データを読み取れませんでした。";

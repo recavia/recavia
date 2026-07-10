@@ -435,8 +435,13 @@ struct ControlPanelView: View {
                     TranscriptTabView(
                         store: viewModel.store,
                         isListening: viewModel.isListening,
-                        showsRecordingIndicator: viewModel.isListening && !viewModel.isViewingOtherWhileRecording,
-                        showsTranslatedText: appSettings.isTranscriptTranslationEffectivelyEnabled
+                        showsRecordingIndicator: viewModel.isListening
+                            && !viewModel.isBatchRecording
+                            && !viewModel.isViewingOtherWhileRecording,
+                        showsTranslatedText: appSettings.isTranscriptTranslationEffectivelyEnabled,
+                        batchTranscriptionState: viewModel.batchTranscriptionState,
+                        retryBatchTranscription: viewModel.retryBatchTranscription,
+                        discardFailedBatchTranscription: viewModel.discardFailedBatchTranscription
                     )
                 }
             }

@@ -65,6 +65,18 @@ final class AppDatabaseManager: Sendable {
             try addSummaryDocumentColumnIfNeeded(in: db)
         }
 
+        migrator.registerMigration("v10_batchTranscription") { db in
+            try addBatchTranscriptionSchemaIfNeeded(in: db)
+        }
+
+        migrator.registerMigration("v11_batchAudioStorageLocation") { db in
+            try addBatchAudioStorageLocationIfNeeded(in: db)
+        }
+
+        migrator.registerMigration("v12_batchTranscriptionDiscard") { db in
+            try addBatchDiscardedAtColumnIfNeeded(in: db)
+        }
+
         return migrator
     }()
 
@@ -352,6 +364,111 @@ final class AppDatabaseManager: Sendable {
 
     private static func addSummaryDocumentColumnIfNeeded(in db: Database) throws {
         try addColumnIfNeeded(in: db, table: "summaries", column: "document", type: .text)
+    }
+
+    private static func addBatchTranscriptionSchemaIfNeeded(in db: Database) throws {
+        guard try db.tableExists("recording_sessions") else { return }
+
+        let columns = try String.fetchAll(db, sql: "SELECT name FROM pragma_table_info('recording_sessions')")
+        let requiredColumns = [
+            "transcriptionMode",
+            "retainAudioAfterBatch",
+            "batchCompletedAt",
+            "batchLastError",
+            "batchLastAttemptAt",
+            "batchAttemptCount",
+        ]
+        if requiredColumns.contains(where: { !columns.contains($0) }) {
+            try db.alter(table: "recording_sessions") { table in
+                if !columns.contains("transcriptionMode") {
+                    table.add(column: "transcriptionMode", .text)
+                        .notNull()
+                        .defaults(to: TranscriptionMode.realtime.rawValue)
+                }
+                if !columns.contains("retainAudioAfterBatch") {
+                    table.add(column: "retainAudioAfterBatch", .boolean)
+                        .notNull()
+                        .defaults(to: false)
+                }
+                if !columns.contains("batchCompletedAt") {
+                    table.add(column: "batchCompletedAt", .datetime)
+                }
+                if !columns.contains("batchLastError") {
+                    table.add(column: "batchLastError", .text)
+                }
+                if !columns.contains("batchLastAttemptAt") {
+                    table.add(column: "batchLastAttemptAt", .datetime)
+                }
+                if !columns.contains("batchAttemptCount") {
+                    table.add(column: "batchAttemptCount", .integer)
+                        .notNull()
+                        .defaults(to: 0)
+                }
+            }
+        }
+
+        if try !db.tableExists("recording_audio_files") {
+            try db.create(table: "recording_audio_files") { table in
+                table.primaryKey("id", .blob)
+                table.column("recordingSessionId", .blob).notNull()
+                    .references("recording_sessions", onDelete: .cascade)
+                table.column("source", .text).notNull()
+                table.column("relativePath", .text).notNull()
+                table.column("sampleRate", .double).notNull()
+                table.column("channelCount", .integer).notNull()
+                table.column("finalizedAt", .datetime)
+                table.column("totalFrameCount", .integer)
+                table.column("createdAt", .datetime).notNull()
+                table.column("updatedAt", .datetime).notNull()
+                table.uniqueKey(["recordingSessionId", "source"])
+            }
+            try db.create(
+                index: "recording_audio_files_on_recordingSessionId",
+                on: "recording_audio_files",
+                columns: ["recordingSessionId"]
+            )
+        }
+
+        if try !db.tableExists("recording_audio_ranges") {
+            try db.create(table: "recording_audio_ranges") { table in
+                table.primaryKey("id", .blob)
+                table.column("audioFileId", .blob).notNull()
+                    .references("recording_audio_files", onDelete: .cascade)
+                table.column("startFrame", .integer).notNull()
+                table.column("frameCount", .integer)
+                table.column("sessionOffsetSeconds", .double).notNull()
+                table.column("localeIdentifier", .text).notNull()
+                table.column("createdAt", .datetime).notNull()
+                table.column("updatedAt", .datetime).notNull()
+            }
+            try db.create(
+                index: "recording_audio_ranges_on_audioFileId_startFrame",
+                on: "recording_audio_ranges",
+                columns: ["audioFileId", "startFrame"]
+            )
+        }
+    }
+
+    private static func addBatchAudioStorageLocationIfNeeded(in db: Database) throws {
+        guard try db.tableExists("recording_audio_files") else { return }
+        let columns = try String.fetchAll(db, sql: "SELECT name FROM pragma_table_info('recording_audio_files')")
+        guard !columns.contains("storageLocation") else { return }
+
+        // v10までのCAFはVaultへ直接保存していたため、既存行はvaultとして扱う。
+        try db.alter(table: "recording_audio_files") { table in
+            table.add(column: "storageLocation", .text)
+                .notNull()
+                .defaults(to: RecordingAudioStorageLocation.vault.rawValue)
+        }
+    }
+
+    private static func addBatchDiscardedAtColumnIfNeeded(in db: Database) throws {
+        try addColumnIfNeeded(
+            in: db,
+            table: "recording_sessions",
+            column: "batchDiscardedAt",
+            type: .datetime
+        )
     }
 
     private static func createRecordingSessionsTableIfNeeded(in db: Database) throws {

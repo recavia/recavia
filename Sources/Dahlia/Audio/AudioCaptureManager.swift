@@ -110,7 +110,11 @@ final class AudioCaptureManager {
     }
 
     /// マイクキャプチャを開始する。
-    func startCapture(targetFormat: AVAudioFormat, selectedDeviceID: AudioDeviceID? = nil) throws {
+    func startCapture(
+        targetFormat: AVAudioFormat,
+        selectedDeviceID: AudioDeviceID? = nil,
+        bufferSize: AVAudioFrameCount = 4096
+    ) throws {
         self.captureFormat = targetFormat
         let inputNode = engine.inputNode
 
@@ -133,7 +137,6 @@ final class AudioCaptureManager {
         conv.sampleRateConverterQuality = AVAudioQuality.medium.rawValue
         self.converter = conv
 
-        let bufferSize: AVAudioFrameCount = 4096
         inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: hardwareFormat) {
             [weak self] buffer, _ in
             self?.processAudioBuffer(buffer)

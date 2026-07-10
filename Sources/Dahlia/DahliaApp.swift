@@ -113,6 +113,7 @@ struct DahliaApp: App {
         guard let db = try? AppDatabaseManager() else { return }
         appDatabase = db
         sidebarViewModel.setAppDatabase(db)
+        viewModel.configureBatchTranscription(dbQueue: db.dbQueue)
 
         let repo = MeetingRepository(dbQueue: db.dbQueue)
         if let lastVault = try? repo.fetchLastOpenedVault() {

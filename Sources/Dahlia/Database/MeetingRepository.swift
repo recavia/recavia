@@ -62,9 +62,11 @@ final class MeetingRepository {
 
     /// 保管庫を登録解除する（関連プロジェクト・ミーティングもカスケード削除）。
     func deleteVault(id: UUID) throws {
+        let audioTargets = try BatchAudioCleanupService.deletionTargets(vaultId: id, dbQueue: dbQueue)
         try dbQueue.write { db in
             _ = try VaultRecord.deleteOne(db, key: id)
         }
+        BatchAudioCleanupService.deleteFiles(audioTargets)
     }
 
     /// 保管庫の最終オープン日時を更新する。
@@ -276,17 +278,34 @@ final class MeetingRepository {
     }
 
     func deleteMeeting(id: UUID) throws {
+        let audioTargets = try BatchAudioCleanupService.deletionTargets(meetingIds: [id], dbQueue: dbQueue)
         try dbQueue.write { db in
             _ = try MeetingRecord.deleteOne(db, key: id)
         }
+        BatchAudioCleanupService.deleteFiles(audioTargets)
+    }
+
+    /// 復旧不能なバッチ録音を明示的に破棄し、要約生成のブロック対象から外す。
+    @discardableResult
+    func discardFailedBatchSession(
+        id: UUID,
+        managedRootURL: URL = BatchAudioStorage.managedRootURL
+    ) throws -> Bool {
+        try BatchTranscriptionDiscardService.discardFailedSession(
+            id: id,
+            dbQueue: dbQueue,
+            managedRootURL: managedRootURL
+        )
     }
 
     /// 複数のミーティングを一括削除する。
     func deleteMeetings(ids: Set<UUID>) throws {
         guard !ids.isEmpty else { return }
+        let audioTargets = try BatchAudioCleanupService.deletionTargets(meetingIds: ids, dbQueue: dbQueue)
         try dbQueue.write { db in
             _ = try MeetingRecord.filter(ids.contains(Column("id"))).deleteAll(db)
         }
+        BatchAudioCleanupService.deleteFiles(audioTargets)
     }
 
     func moveMeeting(id: UUID, toProjectId: UUID?) throws {

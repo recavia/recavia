@@ -11,6 +11,28 @@ struct TranscriptionSettingsView: View {
     var body: some View {
         Form {
             Section {
+                Picker(selection: $settings.transcriptionModeRawValue) {
+                    ForEach(TranscriptionMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode.rawValue)
+                    }
+                } label: {
+                    Text(L10n.transcriptionMethod)
+                    Text(settings.transcriptionMode.description)
+                }
+                .pickerStyle(.radioGroup)
+
+                if settings.transcriptionMode == .batch {
+                    Toggle(isOn: $settings.retainAudioAfterBatchTranscription) {
+                        Text(L10n.retainBatchAudio)
+                        Text(L10n.retainBatchAudioDescription)
+                    }
+                    .toggleStyle(.switch)
+                }
+            } header: {
+                Text(L10n.transcriptionMethod)
+            }
+
+            Section {
                 Toggle(isOn: $settings.transcriptTranslationEnabled) {
                     Text(L10n.transcriptTranslation)
                     Text(L10n.transcriptTranslationDescription)

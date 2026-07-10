@@ -408,3 +408,28 @@
 "Change Folder" = "Change Folder";
 "Select This Folder" = "Select This Folder";
 "The summary was saved locally, but uploading to Google Drive failed." = "The summary was saved locally, but uploading to Google Drive failed.";
+
+/* Batch Transcription */
+"Transcription Method" = "Transcription Method";
+"Real-time" = "Real-time";
+"After Recording" = "After Recording";
+"Show the transcript while recording. Audio files are not saved." = "Show the transcript while recording. Audio files are not saved.";
+"Record audio first, then create a higher-accuracy transcript after recording stops." = "Record audio first, then create a higher-accuracy transcript after recording stops.";
+"Keep Audio After Transcription" = "Keep Audio After Transcription";
+"Keep the CAF audio files in the vault after batch transcription succeeds." = "Keep the CAF audio files in the vault after batch transcription succeeds.";
+"No transcript yet." = "No transcript yet.";
+"Recording audio for transcription after recording stops…" = "Recording audio for transcription after recording stops…";
+"Waiting to transcribe the recording…" = "Waiting to transcribe the recording…";
+"Creating a high-accuracy transcript…" = "Creating a high-accuracy transcript…";
+"High-accuracy transcription completed." = "High-accuracy transcription completed.";
+"Batch transcription failed: %@" = "Batch transcription failed: %@";
+"Retry Batch Transcription" = "Retry Batch Transcription";
+"Discard Failed Recording" = "Discard Failed Recording";
+"Discard this failed recording?" = "Discard this failed recording?";
+"The untranscribed audio will be deleted. Existing transcript content will be kept." = "The untranscribed audio will be deleted. Existing transcript content will be kept.";
+"Cancel" = "Cancel";
+"The recorded audio format is invalid." = "The recorded audio format is invalid.";
+"Could not save the recording: %@" = "Could not save the recording: %@";
+"No compatible audio format is available." = "No compatible audio format is available.";
+"The recorded audio range is invalid or damaged." = "The recorded audio range is invalid or damaged.";
+"Speech analysis could not read the recorded audio." = "Speech analysis could not read the recorded audio.";
