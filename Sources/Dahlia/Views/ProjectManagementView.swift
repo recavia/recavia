@@ -285,15 +285,25 @@ struct ProjectManagementView: View {
     }
 
     private func createProject() {
-        guard !trimmedNewProjectName.isEmpty else { return }
-        guard let project = sidebarViewModel.fetchOrCreateProject(name: trimmedNewProjectName) else {
-            projectCreationErrorMessage = sidebarViewModel.lastError ?? L10n.projectCreationFailedDescription
-            isShowingProjectCreationError = true
-            return
+        let projectName = trimmedNewProjectName
+        guard !projectName.isEmpty else { return }
+
+        let projectId: UUID
+        if let existingProject = sidebarViewModel.allProjectItems.first(where: {
+            $0.projectName.caseInsensitiveCompare(projectName) == .orderedSame
+        }) {
+            projectId = existingProject.projectId
+        } else {
+            guard let project = sidebarViewModel.fetchOrCreateProject(name: projectName) else {
+                projectCreationErrorMessage = sidebarViewModel.lastError ?? L10n.projectCreationFailedDescription
+                isShowingProjectCreationError = true
+                return
+            }
+            projectId = project.record.id
         }
 
         projectSearchText = ""
-        selectedProjectId = project.record.id
+        selectedProjectId = projectId
     }
 
     private func reconcileSelection(with projects: [ProjectOverviewItem]) {
