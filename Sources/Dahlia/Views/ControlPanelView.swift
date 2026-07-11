@@ -476,11 +476,11 @@ struct ControlPanelView: View {
                 }
             }
 
-            if let summaryWarning = viewModel.summaryWarning {
+            if let googleDocsExportError = viewModel.googleDocsExportError {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                    Text(summaryWarning)
+                    Text(googleDocsExportError)
                         .font(.caption)
                         .foregroundStyle(.orange)
                     Spacer()

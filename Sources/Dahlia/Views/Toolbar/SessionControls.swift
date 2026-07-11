@@ -125,6 +125,8 @@ struct ShareSummaryToolbarButton: View {
 
 private struct SummarySharePopover: View {
     @ObservedObject var viewModel: CaptionViewModel
+    @ObservedObject private var driveStore = GoogleDriveStore.shared
+    @State private var isGoogleDocsExportRunning = false
     let dismiss: () -> Void
 
     private var title: String {
@@ -159,6 +161,14 @@ private struct SummarySharePopover: View {
                 .padding(.horizontal, 20)
 
             VStack(spacing: 2) {
+                SummarySharePopoverRow(
+                    title: L10n.exportToGoogleDocs,
+                    systemImage: "doc.badge.arrow.up",
+                    isDisabled: isGoogleDocsExportRunning || driveStore.isBusy,
+                    isLoading: isGoogleDocsExportRunning || driveStore.isBusy
+                ) {
+                    exportToGoogleDocs()
+                }
                 SummarySharePopoverRow(title: L10n.copySummaryForGoogleDocs, systemImage: "doc.richtext") {
                     copySummary(for: .googleDocs)
                 }
@@ -168,30 +178,69 @@ private struct SummarySharePopover: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
+
+            if let errorMessage = googleDocsErrorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 10)
+            }
         }
         .frame(width: 320)
         .padding(.vertical, 8)
+        .task {
+            await driveStore.restoreSessionIfNeeded()
+        }
     }
 
     private func copySummary(for destination: SummaryShareRenderer.Destination) {
         viewModel.copyCurrentSummary(for: destination)
         dismiss()
     }
+
+    private var googleDocsErrorMessage: String? {
+        viewModel.googleDocsExportError ?? driveStore.lastErrorMessage
+    }
+
+    private func exportToGoogleDocs() {
+        guard !isGoogleDocsExportRunning else { return }
+        isGoogleDocsExportRunning = true
+        Task { @MainActor in
+            defer { isGoogleDocsExportRunning = false }
+            await driveStore.restoreSessionIfNeeded()
+            if !driveStore.isAuthorized {
+                await driveStore.signIn()
+            }
+            guard driveStore.isAuthorized else { return }
+            if await viewModel.exportCurrentSummaryToGoogleDocs() {
+                dismiss()
+            }
+        }
+    }
 }
 
 private struct SummarySharePopoverRow: View {
     let title: String
     let systemImage: String
+    var isDisabled = false
+    var isLoading = false
     let action: () -> Void
     @State private var isHovering = false
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 18))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22)
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 22)
+                } else {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 18))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 22)
+                }
                 Text(title)
                     .font(.body)
                 Spacer(minLength: 0)
@@ -205,6 +254,7 @@ private struct SummarySharePopoverRow: View {
             }
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
         .onHover { isHovering = $0 }
     }
 }

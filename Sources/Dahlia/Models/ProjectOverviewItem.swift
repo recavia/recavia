@@ -7,7 +7,6 @@ struct ProjectOverviewItem: Decodable, Equatable, FetchableRecord, Identifiable 
     var projectName: String
     var projectDescription = ""
     var createdAt: Date
-    var googleDriveFolderId: String?
     var missingOnDisk: Bool
     var meetingCount: Int
     var latestMeetingDate: Date?

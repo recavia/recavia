@@ -21,19 +21,16 @@ final class SummaryProgressState {
     var isVisible = false
     var vaultExport: StepStatus = .pending
     var summaryGeneration: StepStatus = .pending
-    var driveExport: StepStatus?
 
     /// 全ステップが完了またはスキップ済みか。
     var isAllDone: Bool {
         vaultExport.isTerminal
             && summaryGeneration.isTerminal
-            && (driveExport?.isTerminal ?? true)
     }
 
     func reset() {
         vaultExport = .pending
         summaryGeneration = .pending
-        driveExport = nil
     }
 
     func show() {

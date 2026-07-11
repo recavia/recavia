@@ -106,7 +106,7 @@ final class MeetingRepository {
                 .fetchOne(db) {
                 return existing
             }
-            let record = ProjectRecord(id: .v7(), vaultId: vaultId, name: name, createdAt: .now, googleDriveFolderId: nil)
+            let record = ProjectRecord(id: .v7(), vaultId: vaultId, name: name, createdAt: .now)
             try record.insert(db)
             return record
         }
@@ -144,19 +144,6 @@ final class MeetingRepository {
     func clearProjectsMissing(prefix: String, vaultId: UUID) throws {
         try dbQueue.write { db in
             try ProjectRecord.setMissingByPrefix(prefix, missing: false, vaultId: vaultId, in: db)
-        }
-    }
-
-    func updateProjectGoogleDriveFolder(id: UUID, folderId: String?) throws {
-        try dbQueue.write { db in
-            guard var record = try ProjectRecord.fetchOne(db, key: id) else { return }
-            let trimmedFolderID = folderId?.trimmingCharacters(in: .whitespacesAndNewlines)
-            record.googleDriveFolderId = if let trimmedFolderID, !trimmedFolderID.isEmpty {
-                trimmedFolderID
-            } else {
-                nil
-            }
-            try record.update(db)
         }
     }
 

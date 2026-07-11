@@ -346,6 +346,8 @@
 "Open Summary" = "要約を開く";
 "Generate Summary" = "要約を生成";
 "Share Summary" = "要約を共有";
+"Export to Google Docs" = "Google Docs に書き出す";
+"Could not export the summary to Google Docs." = "要約を Google Docs に書き出せませんでした。";
 "Copy for Google Docs" = "Google Docs 用にコピー";
 "Copy for Slack" = "Slack 用にコピー";
 "Summary Prompt" = "要約プロンプト";
@@ -404,37 +406,17 @@
 /* Keychain */
 "Authenticate to access your API token stored in Keychain." = "キーチェーンに保存された API トークンにアクセスするために認証が必要です。";
 "Cloud Storage" = "Cloud Storage";
-"Google Drive" = "Google Drive";
-"Connect a Google account to export summaries to Google Drive. Destination folders are configured per project." = "Google アカウントを接続して要約を Google Drive に書き出します。保存先フォルダはプロジェクトごとに設定します。";
-"Sign in with Google to choose project folders and export summaries." = "Google にサインインしてプロジェクトごとの保存先フォルダを選び、要約を Google Drive に書き出します。";
-"Google Drive connected" = "Google Drive 接続済み";
-"No Google Drive account connected" = "Google Drive 未接続";
-"Project Drive Folders" = "プロジェクトの Drive フォルダ";
-"Choose the Google Drive folder used when each project's summaries are exported." = "プロジェクトごとの要約書き出し先 Google Drive フォルダを選択します。";
-"Create a project from a meeting to configure its Google Drive folder." = "Google Drive フォルダを設定するには、ミーティングからプロジェクトを作成してください。";
-"Google Drive folder configured" = "Google Drive フォルダ設定済み";
-"Loading Google Drive folders…" = "Google Drive フォルダを読み込み中…";
+"Google Docs" = "Google Docs";
+"Connect a Google account to export summaries, including images, to Google Docs from the Share menu." = "Google アカウントを接続し、共有メニューから画像を含む要約を Google Docs に書き出します。";
+"Sign in with Google to export summaries to Google Docs." = "Google にサインインして要約を Google Docs に書き出します。";
+"Google Docs connected" = "Google Docs 接続済み";
 "No previous Google session was found." = "以前の Google セッションは見つかりませんでした。";
 "Set GOOGLE_CLIENT_ID before connecting Google services." = "Google サービスを接続する前に、開発者設定または環境変数で GOOGLE_CLIENT_ID を設定してください。";
 "Unexpected response from Google" = "Google から予期しないレスポンスが返されました";
 "Google HTTP %lld: %@" = "Google HTTP %lld: %@";
 "Google account connected, but Calendar access has not been granted yet." = "Google アカウントは接続済みですが、カレンダー権限はまだ付与されていません。";
-"This Google Drive folder is unavailable or you no longer have access to it." = "この Google Drive フォルダは利用できないか、アクセス権がありません。";
 "Unexpected response from Google Drive" = "Google Drive から予期しないレスポンスが返されました";
 "Google Drive HTTP %lld: %@" = "Google Drive HTTP %lld: %@";
-"Search Google Drive folders..." = "Google Drive フォルダを検索...";
-"Search My Drive and shared drives, then choose the folder where summaries should be uploaded." = "マイドライブと共有ドライブを検索し、要約のアップロード先フォルダを選択します。";
-"Recent" = "最近";
-"My Drive" = "マイドライブ";
-"Shared drives" = "共有ドライブ";
-"Shared drive" = "共有ドライブ";
-"No folders found" = "フォルダが見つかりません";
-"No folders in this location" = "この場所にフォルダはありません";
-"No Google Drive folder selected" = "Google Drive フォルダ未設定";
-"Choose Folder" = "フォルダを選択";
-"Change Folder" = "フォルダを変更";
-"Select This Folder" = "このフォルダを選択";
-"The summary was saved locally, but uploading to Google Drive failed." = "要約はローカルに保存されましたが、Google Drive へのアップロードに失敗しました。";
 
 /* Batch Transcription */
 "Transcription Method" = "文字起こし方式";

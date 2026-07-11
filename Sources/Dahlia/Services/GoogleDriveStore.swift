@@ -16,7 +16,6 @@ final class GoogleDriveStore: ObservableObject {
     @Published private(set) var state: State
     @Published private(set) var account: GoogleCalendarAccount?
     @Published private(set) var lastErrorMessage: String?
-    @Published private(set) var folders: [GoogleDriveFolderItem] = []
 
     var isConfigured: Bool {
         signInProvider.isConfigured
@@ -31,7 +30,6 @@ final class GoogleDriveStore: ObservableObject {
     }
 
     private let signInProvider: any GoogleSignInProviding
-    private let apiClient: any GoogleDriveAPIClientProviding
     private let presentingWindowProvider: @MainActor () -> NSWindow?
     private var currentSession: GoogleSession?
     private var didAttemptRestore = false
@@ -39,11 +37,9 @@ final class GoogleDriveStore: ObservableObject {
 
     init(
         signInProvider: any GoogleSignInProviding = GoogleSignInAdapter(sessionKind: .drive),
-        apiClient: any GoogleDriveAPIClientProviding = GoogleDriveAPIClient(),
         presentingWindowProvider: @escaping @MainActor () -> NSWindow? = { NSApp.keyWindow ?? NSApp.mainWindow }
     ) {
         self.signInProvider = signInProvider
-        self.apiClient = apiClient
         self.presentingWindowProvider = presentingWindowProvider
         let sessionDidChangeNotification = signInProvider.sessionDidChangeNotification
         self.state = signInProvider.isConfigured ? .signedOut : .unconfigured
@@ -68,10 +64,12 @@ final class GoogleDriveStore: ObservableObject {
         }
 
         guard signInProvider.hasPreviousSignIn else {
+            lastErrorMessage = nil
             recomputeState()
             return
         }
 
+        lastErrorMessage = nil
         state = .loading
         do {
             let session = try await signInProvider.restorePreviousSignIn()
@@ -80,6 +78,7 @@ final class GoogleDriveStore: ObservableObject {
             clearRuntimeState()
             recomputeState()
         } catch {
+            didAttemptRestore = false
             handle(error)
             recomputeStateIfNeeded()
         }
@@ -96,6 +95,7 @@ final class GoogleDriveStore: ObservableObject {
             return
         }
 
+        lastErrorMessage = nil
         state = .loading
         do {
             let session = try await signInProvider.signIn(
@@ -120,116 +120,13 @@ final class GoogleDriveStore: ObservableObject {
         recomputeState()
     }
 
-    func searchFolders(query: String) async {
-        guard isAuthorized, let session = currentSession else {
-            folders = []
-            recomputeState()
-            return
-        }
-
-        state = .loading
-        do {
-            folders = try await apiClient.searchFolders(accessToken: session.accessToken, query: query)
-            lastErrorMessage = nil
-            recomputeState()
-        } catch {
-            handle(error)
-            recomputeStateIfNeeded()
-        }
-    }
-
-    func browseFolders(parentFolderId: String?) async {
-        guard isAuthorized, let session = currentSession else {
-            folders = []
-            recomputeState()
-            return
-        }
-
-        state = .loading
-        do {
-            folders = try await apiClient.listFolders(
-                accessToken: session.accessToken,
-                parentFolderId: parentFolderId,
-                driveId: nil
-            )
-            lastErrorMessage = nil
-            recomputeState()
-        } catch {
-            handle(error)
-            recomputeStateIfNeeded()
-        }
-    }
-
-    func browseFolders(parentFolderId: String?, driveId: String?) async {
-        guard isAuthorized, let session = currentSession else {
-            folders = []
-            recomputeState()
-            return
-        }
-
-        state = .loading
-        do {
-            folders = try await apiClient.listFolders(
-                accessToken: session.accessToken,
-                parentFolderId: parentFolderId,
-                driveId: driveId
-            )
-            lastErrorMessage = nil
-            recomputeState()
-        } catch {
-            handle(error)
-            recomputeStateIfNeeded()
-        }
-    }
-
-    func browseRecentFolders() async {
-        guard isAuthorized, let session = currentSession else {
-            folders = []
-            recomputeState()
-            return
-        }
-
-        state = .loading
-        do {
-            folders = try await apiClient.listRecentFolders(accessToken: session.accessToken)
-            lastErrorMessage = nil
-            recomputeState()
-        } catch {
-            handle(error)
-            recomputeStateIfNeeded()
-        }
-    }
-
-    func browseSharedDrives() async {
-        guard isAuthorized, let session = currentSession else {
-            folders = []
-            recomputeState()
-            return
-        }
-
-        state = .loading
-        do {
-            folders = try await apiClient.listSharedDrives(accessToken: session.accessToken)
-            lastErrorMessage = nil
-            recomputeState()
-        } catch {
-            handle(error)
-            recomputeStateIfNeeded()
-        }
-    }
-
-    func resolveFolder(id: String) async throws -> GoogleDriveFolderItem {
-        let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw GoogleDriveAPIError.folderNotFound
-        }
-
+    func performAuthorizedOperation<T: Sendable>(
+        _ operation: @Sendable (GoogleSession) async throws -> T
+    ) async throws -> T {
         let session = try await refreshedAuthorizedSession()
-        return try await apiClient.fetchFolder(accessToken: session.accessToken, id: trimmed)
-    }
-
-    func authorizedSession() async throws -> GoogleSession {
-        try await refreshedAuthorizedSession()
+        state = .loading
+        defer { recomputeState() }
+        return try await operation(session)
     }
 
     private func refreshedAuthorizedSession() async throws -> GoogleSession {
@@ -251,7 +148,6 @@ final class GoogleDriveStore: ObservableObject {
     private func clearRuntimeState() {
         currentSession = nil
         if account != nil { account = nil }
-        if !folders.isEmpty { folders = [] }
     }
 
     private func handle(_ error: Error) {
