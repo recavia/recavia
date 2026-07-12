@@ -85,4 +85,11 @@ hdiutil verify "$DMG_PATH"
 codesign --verify --verbose=2 "$DMG_PATH"
 spctl -a -vvv -t open --context context:primary-signature "$DMG_PATH"
 
+if [ -n "${SENTRY_DSN:-}" ]; then
+    echo "=== Uploading release dSYM to Sentry ==="
+    "${SCRIPT_DIR}/upload-dsyms.sh" "${PROJECT_DIR}/.build/release" "$APP_NAME"
+else
+    echo "=== Skipping Sentry dSYM upload: SENTRY_DSN is not configured ==="
+fi
+
 echo "=== Notarization complete: ${DMG_PATH} ==="

@@ -49,12 +49,17 @@ swift test
 
 `build-app.sh` または `notarize.sh` の実行前に `SENTRY_DSN` を設定すると、生成される release アプリの `Info.plist` に DSN を埋め込み、Finder 起動でも Sentry を有効化できます。Debug 実行では送信しないため、`swift run` と `run-dev.sh` は既定で Sentry イベントを送信しません。
 
-Sentry を使う場合、`run-dev.sh` と `build-app.sh` は `SENTRY_AUTH_TOKEN` が設定されていれば `Dahlia.dSYM` のアップロードも試みます。事前に `sentry-cli` をインストールしてください。
+`build-app.sh` と `run-dev.sh` は外部へファイルをアップロードしません。`notarize.sh` で Sentry を有効にしたリリースを作る場合は、`SENTRY_AUTH_TOKEN` と `sentry-cli` を必須とし、実行ファイルと dSYM の UUID が一致することを検証してから、公証成功後に dSYM をアップロードします。
 
 ```bash
 export SENTRY_DSN="https://<key>@o0.ingest.sentry.io/<project>"
+export SENTRY_AUTH_TOKEN="<organization-auth-token>"
 brew install getsentry/tools/sentry-cli
 ```
+
+既定でアップロードするのはデバッグシンボルだけです。ソースコンテキストは Sentry 上でアプリのソースコードを閲覧可能にするため、必要な場合に限り `SENTRY_INCLUDE_SOURCES=1` で明示的に有効化します。`SENTRY_AUTH_TOKEN` は `.env.local`、Keychain、または CI の secret で管理し、アプリには埋め込みません。各リリースの dSYM は非公開の保管先にも残し、公開 GitHub Release には添付しないでください。
+
+アプリはクラッシュスタックと明示的に捕捉したエラーを送信しますが、既定 PII、HTTP 失敗の自動捕捉、ネットワーク breadcrumb、パフォーマンストレース、スクリーンショット、ソース送信は無効です。追加の防御として、Sentry プロジェクト側でもデータスクラビングと IP アドレス除去を設定してください。捕捉するエラーやタグには、文字起こし、音声、カレンダー詳細、API ペイロード、認証情報、ユーザー固有パスを含めないでください。
 
 notarization の初回実行前に、`notarytool` のキーチェーンプロファイルを作成してください。
 

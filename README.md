@@ -49,12 +49,17 @@ swift test
 
 If you set `SENTRY_DSN` before running `build-app.sh` or `notarize.sh`, the generated release app embeds the DSN into `Info.plist` and enables Sentry when launched from Finder. Debug runs remain disabled, so `swift run` and `run-dev.sh` do not send Sentry events by default.
 
-If you use Sentry for app builds, `run-dev.sh` and `build-app.sh` will also try to upload `Dahlia.dSYM` when `SENTRY_AUTH_TOKEN` is set. Install `sentry-cli` first, for example:
+`build-app.sh` and `run-dev.sh` never upload files externally. When `notarize.sh` builds a Sentry-enabled release, it requires `SENTRY_AUTH_TOKEN` and `sentry-cli`, verifies that the executable and dSYM UUIDs match, then uploads the dSYM after notarization succeeds:
 
 ```bash
 export SENTRY_DSN="https://<key>@o0.ingest.sentry.io/<project>"
+export SENTRY_AUTH_TOKEN="<organization-auth-token>"
 brew install getsentry/tools/sentry-cli
 ```
+
+Only debug symbols are uploaded by default. Source context can expose application source code in Sentry and must be enabled explicitly with `SENTRY_INCLUDE_SOURCES=1`. Keep `SENTRY_AUTH_TOKEN` in `.env.local`, Keychain, or a CI secret; it is never embedded in the app. Keep each release dSYM in a private archive and do not attach it to the public GitHub Release.
+
+The app sends crash stacks and explicitly captured errors, but disables default PII, automatic failed-request capture, network breadcrumbs, performance tracing, screenshots, and source upload. Configure server-side data scrubbing and IP address scrubbing in the Sentry project as an additional safeguard. Captured errors and tags must not include transcripts, audio, calendar details, API payloads, credentials, or user-specific paths.
 
 Before the first notarization run, create a notarytool keychain profile:
 
