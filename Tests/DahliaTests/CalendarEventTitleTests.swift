@@ -31,6 +31,6 @@ private func calendarEvent(title: String) -> CalendarEvent {
         startDate: startDate,
         endDate: startDate.addingTimeInterval(3600),
         isAllDay: false,
-        meetingURL: nil
+        conferenceURI: nil
     )
 }

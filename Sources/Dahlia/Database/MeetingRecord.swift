@@ -46,4 +46,57 @@ struct MeetingRecord: Codable, FetchableRecord, PersistableRecord, Equatable {
     var duration: TimeInterval?
     var createdAt: Date
     var updatedAt: Date
+    var calendarEventIcalUid: String? = nil
+    var calendarEventRecurrenceId: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case vaultId
+        case projectId
+        case name
+        case status
+        case duration
+        case createdAt
+        case updatedAt
+        case calendarEventIcalUid = "calendar_event_ical_uid"
+        case calendarEventRecurrenceId = "calendar_event_recurrence_id"
+    }
+}
+
+extension MeetingRecord {
+    /// 明示指定がなければ、同じ iCalendar 系列の現在以前の予定から直近の project を引き継ぐ。
+    static func resolvedProjectIdForNewMeeting(
+        requestedProjectId: UUID?,
+        calendarEvent: CalendarEvent?,
+        vaultId: UUID,
+        allowsCalendarSeriesProjectInheritance: Bool = true,
+        in db: Database
+    ) throws -> UUID? {
+        if let requestedProjectId {
+            return requestedProjectId
+        }
+        guard allowsCalendarSeriesProjectInheritance else { return nil }
+        guard let calendarEvent,
+              let icalUid = calendarEvent.key?.icalUid else { return nil }
+
+        return try UUID.fetchOne(
+            db,
+            sql: """
+            SELECT projects.id
+            FROM meetings
+            JOIN calendar_events
+              ON calendar_events.ical_uid = meetings.calendar_event_ical_uid
+             AND calendar_events.recurrence_id = meetings.calendar_event_recurrence_id
+            JOIN projects ON projects.id = meetings.projectId
+            WHERE meetings.vaultId = ?
+              AND projects.vaultId = ?
+              AND projects.missingOnDisk = 0
+              AND meetings.calendar_event_ical_uid = ?
+              AND calendar_events.start <= ?
+            ORDER BY calendar_events.start DESC, meetings.createdAt DESC, meetings.id DESC
+            LIMIT 1
+            """,
+            arguments: [vaultId, vaultId, icalUid, calendarEvent.startDate]
+        )
+    }
 }

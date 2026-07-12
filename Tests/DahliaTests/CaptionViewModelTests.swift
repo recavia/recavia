@@ -265,7 +265,7 @@ import GRDB
                 startDate: Date(timeIntervalSince1970: 1_776_384_000),
                 endDate: Date(timeIntervalSince1970: 1_776_387_600),
                 isAllDay: false,
-                meetingURL: URL(string: "https://meet.google.com/test-link")
+                conferenceURI: URL(string: "https://meet.google.com/test-link")
             )
             let vaultId = UUID.v7()
             try database.dbQueue.write { db in
@@ -312,7 +312,7 @@ import GRDB
                 startDate: Date(timeIntervalSince1970: 1_776_384_000),
                 endDate: Date(timeIntervalSince1970: 1_776_387_600),
                 isAllDay: false,
-                meetingURL: nil
+                conferenceURI: nil
             )
 
             viewModel.beginDraftMeeting(
@@ -363,7 +363,7 @@ import GRDB
                     startDate: Date(timeIntervalSince1970: 1_776_384_000),
                     endDate: Date(timeIntervalSince1970: 1_776_387_600),
                     isAllDay: false,
-                    meetingURL: URL(string: "https://meet.google.com/test-link")
+                    conferenceURI: URL(string: "https://meet.google.com/test-link")
                 ),
                 dbQueue: database.dbQueue,
                 vaultURL: testVaultURL
@@ -372,16 +372,23 @@ import GRDB
             let meetingId = try #require(viewModel.materializeDraftMeeting())
             let persisted = try database.dbQueue.read { db in
                 let meeting = try MeetingRecord.fetchOne(db, key: meetingId)
-                let calendarEvent = try CalendarEventRecord.filter(Column("meetingId") == meetingId).fetchOne(db)
+                let calendarEvent = try linkedCalendarEvent(meetingId: meetingId, in: db)
+                let source = try CalendarEventSourceRecord
+                    .filter(Column("platform") == CalendarEventPlatform.googleCalendar)
+                    .filter(Column("platform_id") == "event-1")
+                    .fetchOne(db)
                 return try (
                     #require(meeting),
-                    #require(calendarEvent)
+                    #require(calendarEvent),
+                    #require(source)
                 )
             }
 
             #expect(persisted.0.name == "Design review")
-            #expect(persisted.1.platformId == "event-1")
-            #expect(persisted.1.meetingUrl == "https://meet.google.com/test-link")
+            #expect(persisted.0.calendarEventIcalUid == "event-1@google.com")
+            #expect(persisted.0.calendarEventRecurrenceId?.isEmpty == true)
+            #expect(persisted.1.conferenceURI == "https://meet.google.com/test-link")
+            #expect(persisted.2.platformId == "event-1")
             #expect(!viewModel.hasDraftMeeting)
             #expect(viewModel.currentMeetingId == meetingId)
         }
@@ -424,7 +431,7 @@ import GRDB
                     startDate: Date(timeIntervalSince1970: 1_776_384_000),
                     endDate: Date(timeIntervalSince1970: 1_776_387_600),
                     isAllDay: false,
-                    meetingURL: URL(string: "https://zoom.us/j/123456789")
+                    conferenceURI: URL(string: "https://zoom.us/j/123456789")
                 ),
                 dbQueue: database.dbQueue,
                 vaultURL: testVaultURL
@@ -432,13 +439,17 @@ import GRDB
 
             let meetingId = try #require(viewModel.materializeDraftMeeting())
             let persisted = try database.dbQueue.read { db in
-                let calendarEvent = try CalendarEventRecord.filter(Column("meetingId") == meetingId).fetchOne(db)
-                return try #require(calendarEvent)
+                let calendarEvent = try linkedCalendarEvent(meetingId: meetingId, in: db)
+                let source = try CalendarEventSourceRecord
+                    .filter(Column("platform") == CalendarEventPlatform.macOSCalendar)
+                    .filter(Column("platform_id") == "mac-event-1::1776384000")
+                    .fetchOne(db)
+                return try (#require(calendarEvent), #require(source))
             }
 
-            #expect(persisted.platform == "MacOSCalendar")
-            #expect(persisted.platformId == "mac-event-1::1776384000")
-            #expect(persisted.meetingUrl == "https://zoom.us/j/123456789")
+            #expect(persisted.0.icalUid == "mac-event-1@local")
+            #expect(persisted.0.conferenceURI == "https://zoom.us/j/123456789")
+            #expect(persisted.1.platform == CalendarEventPlatform.macOSCalendar)
         }
 
     }
@@ -524,7 +535,7 @@ import GRDB
                 startDate: Date(timeIntervalSince1970: 1_776_384_000),
                 endDate: Date(timeIntervalSince1970: 1_776_387_600),
                 isAllDay: false,
-                meetingURL: URL(string: "https://meet.google.com/test-link")
+                conferenceURI: URL(string: "https://meet.google.com/test-link")
             )
             let vaultId = UUID.v7()
             try database.dbQueue.write { db in
@@ -570,7 +581,7 @@ import GRDB
                 startDate: Date(timeIntervalSince1970: 1_776_384_000),
                 endDate: Date(timeIntervalSince1970: 1_776_387_600),
                 isAllDay: false,
-                meetingURL: nil
+                conferenceURI: nil
             )
 
             let dbQueue = try DatabaseQueue(path: ":memory:")
@@ -621,7 +632,7 @@ import GRDB
                     startDate: Date(timeIntervalSince1970: 1_776_384_000),
                     endDate: Date(timeIntervalSince1970: 1_776_387_600),
                     isAllDay: false,
-                    meetingURL: URL(string: "https://meet.google.com/test-link")
+                    conferenceURI: URL(string: "https://meet.google.com/test-link")
                 ),
                 dbQueue: database.dbQueue,
                 vaultURL: testVaultURL
@@ -631,15 +642,34 @@ import GRDB
             let persisted = try database.dbQueue.read { db in
                 try (
                     XCTUnwrap(MeetingRecord.fetchOne(db, key: meetingId)),
-                    XCTUnwrap(CalendarEventRecord.filter(Column("meetingId") == meetingId).fetchOne(db))
+                    XCTUnwrap(linkedCalendarEvent(meetingId: meetingId, in: db)),
+                    XCTUnwrap(
+                        CalendarEventSourceRecord
+                            .filter(Column("platform") == CalendarEventPlatform.googleCalendar)
+                            .filter(Column("platform_id") == "event-1")
+                            .fetchOne(db)
+                    )
                 )
             }
 
             XCTAssertEqual(persisted.0.name, "Design review")
-            XCTAssertEqual(persisted.1.platformId, "event-1")
-            XCTAssertEqual(persisted.1.meetingUrl, "https://meet.google.com/test-link")
+            XCTAssertEqual(persisted.0.calendarEventIcalUid, "event-1@google.com")
+            XCTAssertEqual(persisted.1.conferenceURI, "https://meet.google.com/test-link")
+            XCTAssertEqual(persisted.2.platformId, "event-1")
             XCTAssertFalse(viewModel.hasDraftMeeting)
             XCTAssertEqual(viewModel.currentMeetingId, meetingId)
         }
-    }
+}
 #endif
+
+private func linkedCalendarEvent(meetingId: UUID, in db: Database) throws -> CalendarEventRecord? {
+    guard let meeting = try MeetingRecord.fetchOne(db, key: meetingId),
+          let icalUid = meeting.calendarEventIcalUid,
+          let recurrenceId = meeting.calendarEventRecurrenceId
+    else { return nil }
+
+    return try CalendarEventRecord.fetch(
+        key: CalendarEventKey(icalUid: icalUid, recurrenceId: recurrenceId),
+        in: db
+    )
+}

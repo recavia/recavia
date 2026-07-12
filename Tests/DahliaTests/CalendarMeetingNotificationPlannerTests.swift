@@ -64,6 +64,6 @@ private func calendarEvent(startDate: Date, isAllDay: Bool = false) -> CalendarE
         startDate: startDate,
         endDate: startDate.addingTimeInterval(3600),
         isAllDay: isAllDay,
-        meetingURL: URL(string: "https://meet.example.com/planning")
+        conferenceURI: URL(string: "https://meet.example.com/planning")
     )
 }

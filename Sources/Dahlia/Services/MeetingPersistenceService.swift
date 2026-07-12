@@ -34,6 +34,7 @@ final class MeetingPersistenceService {
     private let store: TranscriptStore
     private let dbQueue: DatabaseQueue
     let meetingId: UUID
+    private(set) var projectId: UUID?
     private var cancellable: AnyCancellable?
     private var persistedSegmentIds: Set<UUID> = []
     private var persistedSegmentTranslations: [UUID: String?] = [:]
@@ -52,6 +53,7 @@ final class MeetingPersistenceService {
         vaultId: UUID,
         projectId: UUID?,
         initialName: String,
+        allowsCalendarSeriesProjectInheritance: Bool = true,
         calendarEvent: CalendarEvent? = nil,
         recordingSessionId: UUID = .v7(),
         transcriptionMode: TranscriptionMode = .realtime,
@@ -61,6 +63,7 @@ final class MeetingPersistenceService {
         self.store = store
         self.dbQueue = dbQueue
         self.meetingId = .v7()
+        self.projectId = projectId
         self.createsMeeting = true
         self.persistencePolicy = persistencePolicy
 
@@ -75,23 +78,35 @@ final class MeetingPersistenceService {
         )
         self.recordingSession = session
         let trimmedInitialName = initialName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let calendarEventKey = calendarEvent?.key
 
-        let meeting = MeetingRecord(
-            id: meetingId,
-            vaultId: vaultId,
-            projectId: projectId,
-            name: trimmedInitialName,
-            status: transcriptionMode == .realtime ? .ready : .transcriptNotFound,
-            createdAt: now,
-            updatedAt: now
-        )
-        try dbQueue.write { db in
+        let resolvedProjectId = try dbQueue.write { db in
+            if let calendarEvent {
+                try CalendarEventRecord.upsert(event: calendarEvent, now: now, in: db)
+            }
+            let resolvedProjectId = try MeetingRecord.resolvedProjectIdForNewMeeting(
+                requestedProjectId: projectId,
+                calendarEvent: calendarEvent,
+                vaultId: vaultId,
+                allowsCalendarSeriesProjectInheritance: allowsCalendarSeriesProjectInheritance,
+                in: db
+            )
+            let meeting = MeetingRecord(
+                id: meetingId,
+                vaultId: vaultId,
+                projectId: resolvedProjectId,
+                name: trimmedInitialName,
+                status: transcriptionMode == .realtime ? .ready : .transcriptNotFound,
+                createdAt: now,
+                updatedAt: now,
+                calendarEventIcalUid: calendarEventKey?.icalUid,
+                calendarEventRecurrenceId: calendarEventKey?.recurrenceId
+            )
             try meeting.insert(db)
             try session.insert(db)
-            if let calendarEvent {
-                try CalendarEventRecord(meetingId: meetingId, now: now, event: calendarEvent).insert(db)
-            }
+            return resolvedProjectId
         }
+        self.projectId = resolvedProjectId
 
         store.upsertRecordingSession(RecordingSessionTimeline(from: session))
         startObserving()
@@ -113,6 +128,7 @@ final class MeetingPersistenceService {
         self.store = store
         self.dbQueue = dbQueue
         self.meetingId = existingMeetingId
+        self.projectId = nil
         self.createsMeeting = false
         self.persistencePolicy = persistencePolicy
         self.persistedSegmentIds = existingSegmentIds

@@ -271,21 +271,28 @@ import GRDB
 
             let persisted = try database.dbQueue.read { db in
                 let meeting = try MeetingRecord.fetchOne(db, key: service.meetingId)
-                let calendarEvent = try CalendarEventRecord.filter(Column("meetingId") == service.meetingId).fetchOne(db)
+                let calendarEvent = try linkedCalendarEvent(meetingId: service.meetingId, in: db)
+                let source = try CalendarEventSourceRecord
+                    .filter(Column("platform") == CalendarEventPlatform.googleCalendar)
+                    .filter(Column("platform_id") == "event-1")
+                    .fetchOne(db)
                 return try (
                     #require(meeting),
-                    #require(calendarEvent)
+                    #require(calendarEvent),
+                    #require(source)
                 )
             }
 
             #expect(persisted.0.name == "Design review")
-            #expect(persisted.1.platform == "GoogleCalendar")
-            #expect(persisted.1.platformId == "event-1")
+            #expect(persisted.0.calendarEventIcalUid == "event-1@google.com")
+            #expect(persisted.0.calendarEventRecurrenceId?.isEmpty == true)
             #expect(persisted.1.description == "Review launch checklist")
             #expect(persisted.1.icalUid == "event-1@google.com")
             #expect(persisted.1.start == startDate)
             #expect(persisted.1.end == startDate.addingTimeInterval(3600))
-            #expect(persisted.1.meetingUrl == "https://meet.google.com/test-link")
+            #expect(persisted.1.conferenceURI == "https://meet.google.com/test-link")
+            #expect(persisted.1.url == "https://calendar.google.com/calendar/event?eid=event-1")
+            #expect(persisted.2.platformId == "event-1")
         }
 
         @Test
@@ -306,14 +313,61 @@ import GRDB
             service.stop()
 
             let persisted = try database.dbQueue.read { db in
-                let calendarEvent = try CalendarEventRecord.filter(Column("meetingId") == service.meetingId).fetchOne(db)
-                return try #require(calendarEvent)
+                let calendarEvent = try linkedCalendarEvent(meetingId: service.meetingId, in: db)
+                let source = try CalendarEventSourceRecord
+                    .filter(Column("platform") == CalendarEventPlatform.macOSCalendar)
+                    .filter(Column("platform_id") == "mac-event-1::1776384000")
+                    .fetchOne(db)
+                return try (#require(calendarEvent), #require(source))
             }
 
-            #expect(persisted.platform == "MacOSCalendar")
-            #expect(persisted.platformId == "mac-event-1::1776384000")
-            #expect(persisted.description == "Local calendar notes")
-            #expect(persisted.icalUid == "mac-event-1@local")
+            #expect(persisted.0.description == "Local calendar notes")
+            #expect(persisted.0.icalUid == "mac-event-1@local")
+            #expect(persisted.1.platform == CalendarEventPlatform.macOSCalendar)
+            #expect(persisted.1.platformId == "mac-event-1::1776384000")
+        }
+
+        @Test
+        func eventWithoutUIDCreatesMeetingWithoutSyntheticCalendarLink() throws {
+            let database = try makeDatabase()
+            let startDate = Date(timeIntervalSince1970: 1_776_384_000)
+            let event = CalendarEvent(
+                id: "local::missing-uid",
+                calendarID: "local",
+                calendarName: "Local",
+                calendarColorHex: nil,
+                platform: CalendarEventPlatform.macOSCalendar,
+                platformId: "missing-uid",
+                title: "Local event",
+                description: "",
+                icalUid: nil,
+                startDate: startDate,
+                endDate: startDate.addingTimeInterval(3600),
+                isAllDay: false,
+                conferenceURI: nil
+            )
+
+            let service = try MeetingPersistenceService(
+                store: TranscriptStore(),
+                dbQueue: database.dbQueue,
+                vaultId: testVault.id,
+                projectId: nil,
+                initialName: event.title,
+                calendarEvent: event
+            )
+            service.stop()
+
+            let result = try database.dbQueue.read { db in
+                let meeting = try MeetingRecord.fetchOne(db, key: service.meetingId)
+                return try (
+                    #require(meeting),
+                    CalendarEventRecord.fetchCount(db)
+                )
+            }
+
+            #expect(result.0.calendarEventIcalUid == nil)
+            #expect(result.0.calendarEventRecurrenceId == nil)
+            #expect(result.1 == 0)
         }
 
         @Test
@@ -321,8 +375,11 @@ import GRDB
             let database = try makeDatabase()
             let meetingId = UUID.v7()
             let createdAt = Date(timeIntervalSince1970: 1_776_384_000)
+            let event = fixtureEvent(startDate: createdAt)
+            let key = try #require(event.key)
 
             try database.dbQueue.write { db in
+                try CalendarEventRecord.upsert(event: event, now: createdAt, in: db)
                 try MeetingRecord(
                     id: meetingId,
                     vaultId: testVault.id,
@@ -331,19 +388,9 @@ import GRDB
                     status: .ready,
                     duration: 120,
                     createdAt: createdAt,
-                    updatedAt: createdAt
-                ).insert(db)
-                try CalendarEventRecord(
-                    meetingId: meetingId,
-                    createdAt: createdAt,
                     updatedAt: createdAt,
-                    platform: "GoogleCalendar",
-                    platformId: "event-1",
-                    description: "Review launch checklist",
-                    icalUid: "event-1@google.com",
-                    start: createdAt,
-                    end: createdAt.addingTimeInterval(3600),
-                    meetingUrl: "https://meet.google.com/test-link"
+                    calendarEventIcalUid: key.icalUid,
+                    calendarEventRecurrenceId: key.recurrenceId
                 ).insert(db)
             }
 
@@ -363,13 +410,16 @@ import GRDB
         }
 
         @Test
-        func calendarEventConstraintsEnforceUniquenessAndCascadeDelete() throws {
+        func sameCalendarEventCanLinkMultipleMeetingsAndSurvivesMeetingDeletion() throws {
             let database = try makeDatabase()
             let firstMeetingId = UUID.v7()
             let secondMeetingId = UUID.v7()
             let createdAt = Date(timeIntervalSince1970: 1_776_384_000)
+            let event = fixtureEvent(startDate: createdAt)
+            let key = try #require(event.key)
 
             try database.dbQueue.write { db in
+                try CalendarEventRecord.upsert(event: event, now: createdAt, in: db)
                 try MeetingRecord(
                     id: firstMeetingId,
                     vaultId: testVault.id,
@@ -378,7 +428,9 @@ import GRDB
                     status: .ready,
                     duration: nil,
                     createdAt: createdAt,
-                    updatedAt: createdAt
+                    updatedAt: createdAt,
+                    calendarEventIcalUid: key.icalUid,
+                    calendarEventRecurrenceId: key.recurrenceId
                 ).insert(db)
                 try MeetingRecord(
                     id: secondMeetingId,
@@ -387,57 +439,52 @@ import GRDB
                     name: "Second",
                     status: .ready,
                     duration: nil,
-                    createdAt: createdAt,
-                    updatedAt: createdAt
-                ).insert(db)
-                try CalendarEventRecord(
-                    meetingId: firstMeetingId,
-                    createdAt: createdAt,
-                    updatedAt: createdAt,
-                    platform: "GoogleCalendar",
-                    platformId: "event-1",
-                    description: "",
-                    icalUid: nil,
-                    start: createdAt,
-                    end: createdAt.addingTimeInterval(3600),
-                    meetingUrl: nil
+                    createdAt: createdAt.addingTimeInterval(1),
+                    updatedAt: createdAt.addingTimeInterval(1),
+                    calendarEventIcalUid: key.icalUid,
+                    calendarEventRecurrenceId: key.recurrenceId
                 ).insert(db)
             }
+
+            let linkedMeetingCount = try database.dbQueue.read { db in
+                try MeetingRecord
+                    .filter(Column("calendar_event_ical_uid") == key.icalUid)
+                    .filter(Column("calendar_event_recurrence_id") == key.recurrenceId)
+                    .fetchCount(db)
+            }
+            #expect(linkedMeetingCount == 2)
+
+            let repository = MeetingRepository(dbQueue: database.dbQueue)
+            #expect(try repository.resolveMeetingIdForCalendarEvent(event, vaultId: testVault.id) == secondMeetingId)
 
             #expect(throws: Error.self) {
                 try database.dbQueue.write { db in
-                    try CalendarEventRecord(
-                        meetingId: secondMeetingId,
-                        createdAt: createdAt,
-                        updatedAt: createdAt,
-                        platform: "GoogleCalendar",
-                        platformId: "event-1",
-                        description: "",
-                        icalUid: nil,
-                        start: createdAt,
-                        end: createdAt.addingTimeInterval(3600),
-                        meetingUrl: nil
-                    ).insert(db)
+                    _ = try CalendarEventRecord
+                        .filter(Column("ical_uid") == key.icalUid)
+                        .filter(Column("recurrence_id") == key.recurrenceId)
+                        .deleteAll(db)
                 }
             }
 
-            let repository = MeetingRepository(dbQueue: database.dbQueue)
             try repository.deleteMeeting(id: firstMeetingId)
 
             let calendarEventCount = try database.dbQueue.read { db in
                 try CalendarEventRecord.fetchCount(db)
             }
 
-            #expect(calendarEventCount == 0)
+            #expect(calendarEventCount == 1)
         }
 
         @Test
-        func fetchMeetingIdForCalendarEventReturnsPersistedMeeting() throws {
+        func resolveMeetingIdForCalendarEventReturnsPersistedMeeting() throws {
             let database = try makeDatabase()
             let meetingId = UUID.v7()
             let createdAt = Date(timeIntervalSince1970: 1_776_384_000)
+            let event = fixtureEvent(startDate: createdAt)
+            let key = try #require(event.key)
 
             try database.dbQueue.write { db in
+                try CalendarEventRecord.upsert(event: event, now: createdAt, in: db)
                 try MeetingRecord(
                     id: meetingId,
                     vaultId: testVault.id,
@@ -446,27 +493,14 @@ import GRDB
                     status: .ready,
                     duration: nil,
                     createdAt: createdAt,
-                    updatedAt: createdAt
-                ).insert(db)
-                try CalendarEventRecord(
-                    meetingId: meetingId,
-                    createdAt: createdAt,
                     updatedAt: createdAt,
-                    platform: "GoogleCalendar",
-                    platformId: "event-1",
-                    description: "",
-                    icalUid: nil,
-                    start: createdAt,
-                    end: createdAt.addingTimeInterval(3600),
-                    meetingUrl: nil
+                    calendarEventIcalUid: key.icalUid,
+                    calendarEventRecurrenceId: key.recurrenceId
                 ).insert(db)
             }
 
             let repository = MeetingRepository(dbQueue: database.dbQueue)
-            let resolvedMeetingId = try repository.fetchMeetingIdForCalendarEvent(
-                platform: "GoogleCalendar",
-                platformId: "event-1"
-            )
+            let resolvedMeetingId = try repository.resolveMeetingIdForCalendarEvent(event, vaultId: testVault.id)
 
             #expect(resolvedMeetingId == meetingId)
         }
@@ -600,26 +634,35 @@ import GRDB
             let persisted = try database.dbQueue.read { db in
                 try (
                     XCTUnwrap(MeetingRecord.fetchOne(db, key: service.meetingId)),
-                    XCTUnwrap(CalendarEventRecord.filter(Column("meetingId") == service.meetingId).fetchOne(db))
+                    XCTUnwrap(linkedCalendarEvent(meetingId: service.meetingId, in: db)),
+                    XCTUnwrap(
+                        CalendarEventSourceRecord
+                            .filter(Column("platform") == CalendarEventPlatform.googleCalendar)
+                            .filter(Column("platform_id") == "event-1")
+                            .fetchOne(db)
+                    )
                 )
             }
 
             XCTAssertEqual(persisted.0.name, "Design review")
-            XCTAssertEqual(persisted.1.platform, "GoogleCalendar")
-            XCTAssertEqual(persisted.1.platformId, "event-1")
+            XCTAssertEqual(persisted.0.calendarEventIcalUid, "event-1@google.com")
             XCTAssertEqual(persisted.1.description, "Review launch checklist")
             XCTAssertEqual(persisted.1.icalUid, "event-1@google.com")
             XCTAssertEqual(persisted.1.start, startDate)
             XCTAssertEqual(persisted.1.end, startDate.addingTimeInterval(3600))
-            XCTAssertEqual(persisted.1.meetingUrl, "https://meet.google.com/test-link")
+            XCTAssertEqual(persisted.1.conferenceURI, "https://meet.google.com/test-link")
+            XCTAssertEqual(persisted.2.platformId, "event-1")
         }
 
         func testAppendModeDoesNotCreateAdditionalCalendarEvent() throws {
             let database = try makeDatabase()
             let meetingId = UUID.v7()
             let createdAt = Date(timeIntervalSince1970: 1_776_384_000)
+            let event = fixtureEvent(startDate: createdAt)
+            let key = try XCTUnwrap(event.key)
 
             try database.dbQueue.write { db in
+                try CalendarEventRecord.upsert(event: event, now: createdAt, in: db)
                 try MeetingRecord(
                     id: meetingId,
                     vaultId: testVault.id,
@@ -628,19 +671,9 @@ import GRDB
                     status: .ready,
                     duration: 120,
                     createdAt: createdAt,
-                    updatedAt: createdAt
-                ).insert(db)
-                try CalendarEventRecord(
-                    meetingId: meetingId,
-                    createdAt: createdAt,
                     updatedAt: createdAt,
-                    platform: "GoogleCalendar",
-                    platformId: "event-1",
-                    description: "Review launch checklist",
-                    icalUid: "event-1@google.com",
-                    start: createdAt,
-                    end: createdAt.addingTimeInterval(3600),
-                    meetingUrl: "https://meet.google.com/test-link"
+                    calendarEventIcalUid: key.icalUid,
+                    calendarEventRecurrenceId: key.recurrenceId
                 ).insert(db)
             }
 
@@ -659,13 +692,16 @@ import GRDB
             XCTAssertEqual(calendarEventCount, 1)
         }
 
-        func testCalendarEventConstraintsEnforceUniquenessAndCascadeDelete() throws {
+        func testSameCalendarEventCanLinkMultipleMeetingsAndSurvivesMeetingDeletion() throws {
             let database = try makeDatabase()
             let firstMeetingId = UUID.v7()
             let secondMeetingId = UUID.v7()
             let createdAt = Date(timeIntervalSince1970: 1_776_384_000)
+            let event = fixtureEvent(startDate: createdAt)
+            let key = try XCTUnwrap(event.key)
 
             try database.dbQueue.write { db in
+                try CalendarEventRecord.upsert(event: event, now: createdAt, in: db)
                 try MeetingRecord(
                     id: firstMeetingId,
                     vaultId: testVault.id,
@@ -674,7 +710,9 @@ import GRDB
                     status: .ready,
                     duration: nil,
                     createdAt: createdAt,
-                    updatedAt: createdAt
+                    updatedAt: createdAt,
+                    calendarEventIcalUid: key.icalUid,
+                    calendarEventRecurrenceId: key.recurrenceId
                 ).insert(db)
                 try MeetingRecord(
                     id: secondMeetingId,
@@ -683,56 +721,36 @@ import GRDB
                     name: "Second",
                     status: .ready,
                     duration: nil,
-                    createdAt: createdAt,
-                    updatedAt: createdAt
-                ).insert(db)
-                try CalendarEventRecord(
-                    meetingId: firstMeetingId,
-                    createdAt: createdAt,
-                    updatedAt: createdAt,
-                    platform: "GoogleCalendar",
-                    platformId: "event-1",
-                    description: "",
-                    icalUid: nil,
-                    start: createdAt,
-                    end: createdAt.addingTimeInterval(3600),
-                    meetingUrl: nil
+                    createdAt: createdAt.addingTimeInterval(1),
+                    updatedAt: createdAt.addingTimeInterval(1),
+                    calendarEventIcalUid: key.icalUid,
+                    calendarEventRecurrenceId: key.recurrenceId
                 ).insert(db)
             }
 
-            XCTAssertThrowsError(
-                try database.dbQueue.write { db in
-                    try CalendarEventRecord(
-                        meetingId: secondMeetingId,
-                        createdAt: createdAt,
-                        updatedAt: createdAt,
-                        platform: "GoogleCalendar",
-                        platformId: "event-1",
-                        description: "",
-                        icalUid: nil,
-                        start: createdAt,
-                        end: createdAt.addingTimeInterval(3600),
-                        meetingUrl: nil
-                    ).insert(db)
-                }
-            )
-
             let repository = MeetingRepository(dbQueue: database.dbQueue)
+            XCTAssertEqual(
+                try repository.resolveMeetingIdForCalendarEvent(event, vaultId: testVault.id),
+                secondMeetingId
+            )
             try repository.deleteMeeting(id: firstMeetingId)
 
             let calendarEventCount = try database.dbQueue.read { db in
                 try CalendarEventRecord.fetchCount(db)
             }
 
-            XCTAssertEqual(calendarEventCount, 0)
+            XCTAssertEqual(calendarEventCount, 1)
         }
 
         func testFetchMeetingIdForCalendarEventReturnsPersistedMeeting() throws {
             let database = try makeDatabase()
             let meetingId = UUID.v7()
             let createdAt = Date(timeIntervalSince1970: 1_776_384_000)
+            let event = fixtureEvent(startDate: createdAt)
+            let key = try XCTUnwrap(event.key)
 
             try database.dbQueue.write { db in
+                try CalendarEventRecord.upsert(event: event, now: createdAt, in: db)
                 try MeetingRecord(
                     id: meetingId,
                     vaultId: testVault.id,
@@ -741,27 +759,14 @@ import GRDB
                     status: .ready,
                     duration: nil,
                     createdAt: createdAt,
-                    updatedAt: createdAt
-                ).insert(db)
-                try CalendarEventRecord(
-                    meetingId: meetingId,
-                    createdAt: createdAt,
                     updatedAt: createdAt,
-                    platform: "GoogleCalendar",
-                    platformId: "event-1",
-                    description: "",
-                    icalUid: nil,
-                    start: createdAt,
-                    end: createdAt.addingTimeInterval(3600),
-                    meetingUrl: nil
+                    calendarEventIcalUid: key.icalUid,
+                    calendarEventRecurrenceId: key.recurrenceId
                 ).insert(db)
             }
 
             let repository = MeetingRepository(dbQueue: database.dbQueue)
-            let resolvedMeetingId = try repository.fetchMeetingIdForCalendarEvent(
-                platform: "GoogleCalendar",
-                platformId: "event-1"
-            )
+            let resolvedMeetingId = try repository.resolveMeetingIdForCalendarEvent(event, vaultId: testVault.id)
 
             XCTAssertEqual(resolvedMeetingId, meetingId)
         }
@@ -925,6 +930,18 @@ private func fetchAppendPersistence(
     }
 }
 
+private func linkedCalendarEvent(meetingId: UUID, in db: Database) throws -> CalendarEventRecord? {
+    guard let meeting = try MeetingRecord.fetchOne(db, key: meetingId),
+          let icalUid = meeting.calendarEventIcalUid,
+          let recurrenceId = meeting.calendarEventRecurrenceId
+    else { return nil }
+
+    return try CalendarEventRecord.fetch(
+        key: CalendarEventKey(icalUid: icalUid, recurrenceId: recurrenceId),
+        in: db
+    )
+}
+
 private func fixtureEvent(startDate: Date) -> GoogleCalendarEvent {
     GoogleCalendarEvent(
         id: "primary::event-1",
@@ -938,7 +955,8 @@ private func fixtureEvent(startDate: Date) -> GoogleCalendarEvent {
         startDate: startDate,
         endDate: startDate.addingTimeInterval(3600),
         isAllDay: false,
-        meetingURL: URL(string: "https://meet.google.com/test-link")
+        conferenceURI: URL(string: "https://meet.google.com/test-link"),
+        url: URL(string: "https://calendar.google.com/calendar/event?eid=event-1")
     )
 }
 
@@ -956,6 +974,6 @@ private func fixtureMacCalendarEvent(startDate: Date) -> CalendarEvent {
         startDate: startDate,
         endDate: startDate.addingTimeInterval(3600),
         isAllDay: false,
-        meetingURL: URL(string: "https://zoom.us/j/123456789")
+        conferenceURI: URL(string: "https://zoom.us/j/123456789")
     )
 }

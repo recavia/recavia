@@ -98,6 +98,8 @@ AudioSourcePipeline → CapturedAudioChunk
 MeetingPersistenceService → SQLite (GRDB)
 ```
 
+UID／RECURRENCE-IDのキー形式、source対応、Meetingとのカーディナリティは[カレンダー予定の永続化スキーマ](docs/calendar-event-schema.md)を参照してください。
+
 ### プロジェクト構成
 
 ```

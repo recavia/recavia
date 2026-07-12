@@ -152,8 +152,8 @@ struct DahliaApp: App {
 
     private func joinAndStartRecording(_ meeting: DetectedMeeting, in db: AppDatabaseManager) {
         handleDetectedMeeting(meeting, in: db, startTranscription: true)
-        if let meetingURL = meeting.calendarEvent?.meetingURL {
-            NSWorkspace.shared.open(meetingURL)
+        if let conferenceURI = meeting.calendarEvent?.conferenceURI {
+            NSWorkspace.shared.open(conferenceURI)
         }
     }
 
@@ -167,14 +167,17 @@ struct DahliaApp: App {
 
         if let event = meeting.calendarEvent {
             let repository = MeetingRepository(dbQueue: db.dbQueue)
-            if let existingMeetingId = try? repository.fetchMeetingIdForCalendarEvent(
-                platform: event.platform,
-                platformId: event.platformId
-            ) {
-                sidebarViewModel.selectMeeting(existingMeetingId)
-                if startTranscription {
-                    startTranscriptionForMeeting(existingMeetingId, in: db, vault: vault)
+            do {
+                if let existingMeetingId = try repository.resolveMeetingIdForCalendarEvent(event, vaultId: vault.id) {
+                    sidebarViewModel.selectMeeting(existingMeetingId)
+                    if startTranscription {
+                        startTranscriptionForMeeting(existingMeetingId, in: db, vault: vault)
+                    }
+                    return
                 }
+            } catch {
+                viewModel.errorMessage = error.localizedDescription
+                ErrorReportingService.capture(error, context: ["source": "calendarMeetingResolution"])
                 return
             }
 
@@ -209,7 +212,14 @@ struct DahliaApp: App {
     }
 
     private func startTranscriptionForMeeting(_ meetingId: UUID, in db: AppDatabaseManager, vault: VaultRecord) {
-        let ctx = meetingContext(for: meetingId)
+        let ctx: (projectURL: URL?, projectId: UUID?, projectName: String?)
+        do {
+            ctx = try meetingContext(for: meetingId, in: db, vault: vault)
+        } catch {
+            viewModel.errorMessage = error.localizedDescription
+            ErrorReportingService.capture(error, context: ["source": "meetingContext"])
+            return
+        }
         Task { @MainActor in
             await viewModel.startListening(
                 dbQueue: db.dbQueue,
@@ -223,13 +233,18 @@ struct DahliaApp: App {
         }
     }
 
-    private func meetingContext(for meetingId: UUID) -> (projectURL: URL?, projectId: UUID?, projectName: String?) {
-        guard let meetingItem = sidebarViewModel.allMeetings.first(where: { $0.meetingId == meetingId }) else {
+    private func meetingContext(
+        for meetingId: UUID,
+        in db: AppDatabaseManager,
+        vault: VaultRecord
+    ) throws -> (projectURL: URL?, projectId: UUID?, projectName: String?) {
+        let repository = MeetingRepository(dbQueue: db.dbQueue)
+        guard let meeting = try repository.fetchMeeting(id: meetingId) else {
             return (nil, nil, nil)
         }
-
-        let projectURL = meetingItem.projectName.map { sidebarViewModel.projectURL(for: $0) }
-        return (projectURL, meetingItem.projectId, meetingItem.projectName)
+        let project = try meeting.projectId.flatMap { try repository.fetchProject(id: $0) }
+        let projectURL = project.map { vault.url.appending(path: $0.name, directoryHint: .isDirectory) }
+        return (projectURL, project?.id, project?.name)
     }
 }
 

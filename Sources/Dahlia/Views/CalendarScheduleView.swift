@@ -356,7 +356,7 @@ private struct CalendarScheduleSectionView: View {
                     CalendarScheduleEventRow(
                         event: event,
                         onSelect: { onSelectEvent(event) },
-                        onJoin: event.meetingURL.map { url in
+                        onJoin: event.conferenceURI.map { url in
                             { onOpenURL(url) }
                         }
                     )

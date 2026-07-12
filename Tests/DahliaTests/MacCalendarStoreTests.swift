@@ -130,7 +130,7 @@ struct MacCalendarStoreTests {
             startDate: fixtureNow.addingTimeInterval(7200),
             endDate: fixtureNow.addingTimeInterval(9000),
             isAllDay: false,
-            meetingURL: nil
+            conferenceURI: nil
         )
         let outsideWindow = CalendarEvent(
             id: "work::outside",
@@ -145,7 +145,7 @@ struct MacCalendarStoreTests {
             startDate: fixtureNow.addingTimeInterval(9 * 24 * 60 * 60),
             endDate: fixtureNow.addingTimeInterval(9 * 24 * 60 * 60 + 3600),
             isAllDay: false,
-            meetingURL: nil
+            conferenceURI: nil
         )
 
         let filtered = EventKitMacCalendarEventStore.sortAndFilter(
@@ -158,13 +158,27 @@ struct MacCalendarStoreTests {
     }
 
     @Test
-    func meetingURLExtractorFindsKnownMeetingLinksInNotes() {
-        let url = CalendarMeetingURLExtractor.meetingURL(
-            url: URL(string: "https://example.com/not-a-meeting"),
+    func conferenceURIExtractorFindsKnownMeetingLinksAndPrefersHTTPS() {
+        let url = CalendarConferenceURIExtractor.conferenceURI(
+            url: URL(string: "http://zoom.us/j/123"),
             textFields: ["Join from https://teams.microsoft.com/l/meetup-join/abc."]
         )
 
         #expect(url?.absoluteString == "https://teams.microsoft.com/l/meetup-join/abc")
+    }
+
+    @Test
+    func allDayRecurrenceIdUsesEventKitDefaultTimeZone() throws {
+        let defaultTimeZone = try #require(TimeZone(identifier: "Asia/Tokyo"))
+        let occurrenceDate = Date(timeIntervalSince1970: 1_776_387_600)
+
+        let recurrenceId = EventKitMacCalendarEventStore.recurrenceId(
+            occurrenceDate: occurrenceDate,
+            isAllDay: true,
+            defaultTimeZone: defaultTimeZone
+        )
+
+        #expect(recurrenceId == "20260417")
     }
 }
 
@@ -197,7 +211,7 @@ private let fixtureEvent = CalendarEvent(
     startDate: fixtureNow.addingTimeInterval(3600),
     endDate: fixtureNow.addingTimeInterval(7200),
     isAllDay: false,
-    meetingURL: URL(string: "https://meet.google.com/test-link")
+    conferenceURI: URL(string: "https://meet.google.com/test-link")
 )
 
 @MainActor

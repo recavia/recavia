@@ -98,6 +98,8 @@ AudioSourcePipeline → CapturedAudioChunk
 MeetingPersistenceService → SQLite (GRDB)
 ```
 
+See [Calendar event persistence schema](docs/calendar-event-schema.md) for the UID/RECURRENCE-ID key, source mapping, and Meeting cardinality contract.
+
 ### Project Structure
 
 ```

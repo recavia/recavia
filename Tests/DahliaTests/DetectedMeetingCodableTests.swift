@@ -21,7 +21,8 @@ import Foundation
                 startDate: startDate,
                 endDate: startDate.addingTimeInterval(3600),
                 isAllDay: false,
-                meetingURL: URL(string: "https://meet.example.com/planning")
+                conferenceURI: URL(string: "https://meet.example.com/planning"),
+                url: URL(string: "https://calendar.example.com/events/planning")
             )
             let meeting = DetectedMeeting(
                 title: event.title,
@@ -36,6 +37,37 @@ import Foundation
             #expect(decoded.id == meeting.id)
             #expect(decoded.title == meeting.title)
             #expect(decoded.calendarEvent == event)
+        }
+
+        @Test
+        func decodesLegacyMeetingAndSourceEventURLs() throws {
+            let event = CalendarEvent(
+                id: "event-id",
+                calendarID: "calendar-id",
+                calendarName: "Work",
+                calendarColorHex: nil,
+                platformId: "platform-id",
+                title: "Planning",
+                description: "",
+                icalUid: "uid",
+                startDate: Date(timeIntervalSince1970: 1_700_000_000),
+                endDate: Date(timeIntervalSince1970: 1_700_003_600),
+                isAllDay: false,
+                conferenceURI: URL(string: "https://meet.example.com/planning"),
+                url: URL(string: "https://calendar.example.com/events/planning")
+            )
+            let encoded = try JSONEncoder().encode(event)
+            var legacyObject = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+            legacyObject["meetingURL"] = legacyObject.removeValue(forKey: "conferenceURI")
+            legacyObject["sourceEventURL"] = legacyObject.removeValue(forKey: "url")
+            legacyObject.removeValue(forKey: "recurrenceId")
+            let legacyData = try JSONSerialization.data(withJSONObject: legacyObject)
+
+            let decoded = try JSONDecoder().decode(CalendarEvent.self, from: legacyData)
+
+            #expect(decoded.conferenceURI == event.conferenceURI)
+            #expect(decoded.url == event.url)
+            #expect(decoded.recurrenceId.isEmpty)
         }
     }
 #endif

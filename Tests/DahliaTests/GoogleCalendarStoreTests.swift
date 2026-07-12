@@ -197,10 +197,15 @@ struct GoogleCalendarStoreTests {
             summary: "Weekly sync",
             description: "Discuss launch plan",
             iCalUID: "event-1@google.com",
+            htmlLink: nil,
             hangoutLink: nil,
             start: .init(date: nil, dateTime: "2026-04-17T01:00:00Z"),
             end: .init(date: nil, dateTime: "2026-04-17T02:00:00Z"),
-            conferenceData: .init(entryPoints: [.init(uri: "https://meet.google.com/abc-defg-hij")]),
+            originalStartTime: nil,
+            conferenceData: .init(entryPoints: [
+                .init(uri: "tel:+81-3-1234-5678"),
+                .init(uri: "https://meet.google.com/abc-defg-hij"),
+            ]),
             eventType: nil
         )
         let transformedEvent = try GoogleCalendarAPIClient.makeEvent(
@@ -210,10 +215,11 @@ struct GoogleCalendarStoreTests {
         )
         let event = try #require(transformedEvent)
 
-        #expect(event.meetingURL?.absoluteString == "https://meet.google.com/abc-defg-hij")
+        #expect(event.conferenceURI?.absoluteString == "https://meet.google.com/abc-defg-hij")
         #expect(event.platformId == "event-1")
         #expect(event.description == "Discuss launch plan")
         #expect(event.icalUid == "event-1@google.com")
+        #expect(event.recurrenceId.isEmpty)
         #expect(!event.isAllDay)
 
         let intervalEnd = Calendar.current.date(byAdding: .day, value: 7, to: fixtureNow)!
@@ -232,7 +238,7 @@ struct GoogleCalendarStoreTests {
                     startDate: Calendar.current.date(byAdding: .day, value: 9, to: fixtureNow)!,
                     endDate: Calendar.current.date(byAdding: .day, value: 9, to: fixtureNow)!,
                     isAllDay: true,
-                    meetingURL: nil
+                    conferenceURI: nil
                 ),
             ],
             now: fixtureNow,
@@ -249,9 +255,11 @@ struct GoogleCalendarStoreTests {
             summary: nil,
             description: nil,
             iCalUID: nil,
+            htmlLink: nil,
             hangoutLink: nil,
             start: .init(date: "2026-04-18", dateTime: nil),
             end: .init(date: "2026-04-19", dateTime: nil),
+            originalStartTime: nil,
             conferenceData: nil,
             eventType: nil
         )
@@ -272,9 +280,11 @@ struct GoogleCalendarStoreTests {
             summary: "Out of office",
             description: nil,
             iCalUID: nil,
+            htmlLink: nil,
             hangoutLink: nil,
             start: .init(date: nil, dateTime: "2026-04-18T01:00:00Z"),
             end: .init(date: nil, dateTime: "2026-04-18T02:00:00Z"),
+            originalStartTime: nil,
             conferenceData: nil,
             eventType: "outOfOffice"
         )
@@ -397,7 +407,7 @@ private let fixtureEvent = GoogleCalendarEvent(
     startDate: fixtureNow.addingTimeInterval(3600),
     endDate: fixtureNow.addingTimeInterval(7200),
     isAllDay: false,
-    meetingURL: URL(string: "https://meet.google.com/test-link")
+    conferenceURI: URL(string: "https://meet.google.com/test-link")
 )
 
 @MainActor

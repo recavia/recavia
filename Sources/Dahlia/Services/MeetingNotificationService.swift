@@ -341,7 +341,7 @@ final class MeetingNotificationService: NSObject, UNUserNotificationCenterDelega
             bundleIdentifier: event.platform,
             calendarEvent: event
         )
-        let categoryIdentifier = event.meetingURL == nil
+        let categoryIdentifier = event.conferenceURI == nil
             ? Self.calendarCategoryIdentifier
             : Self.calendarJoinCategoryIdentifier
         let content = try notificationContent(

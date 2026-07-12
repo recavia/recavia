@@ -7,4 +7,5 @@ struct DraftMeeting: Equatable {
     var projectURL: URL?
     var projectId: UUID?
     var projectName: String?
+    var allowsCalendarSeriesProjectInheritance = true
 }

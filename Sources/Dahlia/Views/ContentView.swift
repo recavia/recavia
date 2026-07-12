@@ -122,11 +122,13 @@ struct ContentView: View {
               let vault = sidebarViewModel.currentVault else { return }
 
         let repository = MeetingRepository(dbQueue: dbQueue)
-        if let existingMeetingId = try? repository.fetchMeetingIdForCalendarEvent(
-            platform: event.platform,
-            platformId: event.platformId
-        ), sidebarViewModel.allMeetings.contains(where: { $0.meetingId == existingMeetingId }) {
-            sidebarViewModel.selectMeeting(existingMeetingId)
+        do {
+            if let existingMeetingId = try repository.resolveMeetingIdForCalendarEvent(event, vaultId: vault.id) {
+                sidebarViewModel.selectMeeting(existingMeetingId)
+                return
+            }
+        } catch {
+            viewModel.errorMessage = error.localizedDescription
             return
         }
 
@@ -140,17 +142,23 @@ struct ContentView: View {
 
     private func handleMeetingSelection(_ meetingId: UUID) {
         guard let dbQueue = sidebarViewModel.dbQueue,
-              let vault = sidebarViewModel.currentVault,
-              let item = sidebarViewModel.allMeetings.first(where: { $0.meetingId == meetingId }) else { return }
+              let vault = sidebarViewModel.currentVault else { return }
 
-        viewModel.loadMeeting(
-            meetingId,
-            dbQueue: dbQueue,
-            projectURL: item.projectName.map { sidebarViewModel.projectURL(for: $0) },
-            projectId: item.projectId,
-            projectName: item.projectName,
-            vaultURL: vault.url
-        )
+        do {
+            let repository = MeetingRepository(dbQueue: dbQueue)
+            guard let meeting = try repository.fetchMeeting(id: meetingId) else { return }
+            let project = try meeting.projectId.flatMap { try repository.fetchProject(id: $0) }
+            viewModel.loadMeeting(
+                meetingId,
+                dbQueue: dbQueue,
+                projectURL: project.map { vault.url.appending(path: $0.name, directoryHint: .isDirectory) },
+                projectId: project?.id,
+                projectName: project?.name,
+                vaultURL: vault.url
+            )
+        } catch {
+            viewModel.errorMessage = error.localizedDescription
+        }
     }
 }
 
