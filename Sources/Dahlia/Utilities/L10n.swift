@@ -338,7 +338,7 @@ enum L10n {
     static var appLanguageDescription: String { String(localized: "Set the display language for the app.", bundle: bundle) }
     static var followSystem: String { String(localized: "Follow System", bundle: bundle) }
     static var notificationSettingsDescription: String { String(
-        localized: "Manage meeting detection prompts and related notification behavior.",
+        localized: "Choose one or both conditions. Calendar notifications use events from enabled calendar sources.",
         bundle: bundle
     ) }
     static var transcriptionSettingsDescription: String { String(
@@ -752,25 +752,26 @@ enum L10n {
 
     // MARK: - Meeting Detection
 
-    static var meetingDetection: String { String(localized: "Meeting Detection", bundle: bundle) }
-    static var meetingDetectionDescription: String { String(
-        localized: "Show a prompt when a video meeting is detected.",
+    static var meetingNotifications: String { String(localized: "Meeting Notifications", bundle: bundle) }
+    static var meetingNotificationsDescription: String { String(
+        localized: "Notify me about meetings using macOS notifications.",
         bundle: bundle
     ) }
-    static func meetingDetectedMessage(_ appName: String) -> String { String(
-        localized: "Meeting detected (\(appName)). Start transcription?",
+    static var notificationConditions: String { String(localized: "Notification Conditions", bundle: bundle) }
+    static var notificationConditionsDescription: String { String(
+        localized: "Choose when Dahlia sends a meeting notification.",
         bundle: bundle
     ) }
+    static var microphoneActivityNotification: String { String(localized: "Meeting app microphone activity", bundle: bundle) }
+    static var calendarEventNotification: String { String(localized: "One minute before calendar events", bundle: bundle) }
+    static var calendarEventStartsInOneMinute: String { String(localized: "This event starts in one minute.", bundle: bundle) }
+    static var joinAndStartRecording: String { String(localized: "Join and Start Recording", bundle: bundle) }
     static var startTranscription: String { String(localized: "Start Transcription", bundle: bundle) }
-    static var startTranscribing: String { String(localized: "Start transcribing", bundle: bundle) }
-    static var manageNotificationSettings: String { String(localized: "Manage notification settings", bundle: bundle) }
-    static var dismiss: String { String(localized: "Dismiss", bundle: bundle) }
     static var meetingDetected: String { String(localized: "Meeting detected", bundle: bundle) }
     static func meetingDetectedSubtitle(_ appName: String) -> String { String(
         localized: "Meeting detected in \(appName)",
         bundle: bundle
     ) }
-    static var microphoneInUse: String { String(localized: "Microphone is in use", bundle: bundle) }
     static var noScreenshotsYet: String { String(localized: "No screenshots yet.", bundle: bundle) }
 
     // MARK: - Keychain

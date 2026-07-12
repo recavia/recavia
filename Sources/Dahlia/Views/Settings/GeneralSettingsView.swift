@@ -46,10 +46,30 @@ struct GeneralSettingsView: View {
 
             Section {
                 Toggle(isOn: $settings.meetingDetectionEnabled) {
-                    Text(L10n.meetingDetection)
-                    Text(L10n.meetingDetectionDescription)
+                    Text(L10n.meetingNotifications)
+                    Text(L10n.meetingNotificationsDescription)
                 }
                 .toggleStyle(.switch)
+
+                LabeledContent {
+                    VStack(alignment: .leading) {
+                        Toggle(
+                            L10n.microphoneActivityNotification,
+                            isOn: $settings.microphoneMeetingNotificationsEnabled
+                        )
+                        .toggleStyle(.checkbox)
+
+                        Toggle(
+                            L10n.calendarEventNotification,
+                            isOn: $settings.calendarEventMeetingNotificationsEnabled
+                        )
+                        .toggleStyle(.checkbox)
+                    }
+                } label: {
+                    Text(L10n.notificationConditions)
+                    Text(L10n.notificationConditionsDescription)
+                }
+                .disabled(!settings.meetingDetectionEnabled)
             } header: {
                 Text(L10n.notifications)
             } footer: {

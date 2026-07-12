@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// 設定画面のカテゴリ。
@@ -43,13 +42,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 
 enum SettingsNavigation {
     static let selectedCategoryDefaultsKey = "settingsSelectedCategory"
-
-    @MainActor
-    static func open(_ category: SettingsCategory) {
-        UserDefaults.standard.set(category.rawValue, forKey: selectedCategoryDefaultsKey)
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-    }
 }
 
 /// 設定画面（Cmd+, で表示）。

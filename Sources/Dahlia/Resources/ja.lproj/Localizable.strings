@@ -198,7 +198,7 @@
 "App Language" = "表示言語";
 "Set the display language for the app." = "アプリの表示言語を設定します。";
 "Follow System" = "システムに従う";
-"Manage meeting detection prompts and related notification behavior." = "会議検出のポップアップと関連する通知設定を管理します。";
+"Choose one or both conditions. Calendar notifications use events from enabled calendar sources." = "1つまたは両方の条件を選択できます。カレンダー通知には、有効なカレンダーソースの予定が使用されます。";
 "Choose which languages appear when starting transcription." = "文字起こし開始時に表示する言語を選びます。";
 "Transcript Translation" = "文字起こし翻訳";
 "Show translated transcript lines in the selected target language when available." = "選択したターゲット言語で翻訳済みの文字起こし行を表示します。";
@@ -391,16 +391,17 @@
 "Quit Dahlia" = "Dahlia を終了";
 
 /* Meeting Detection */
-"Meeting Detection" = "会議検出";
-"Show a prompt when a video meeting is detected." = "ビデオ会議が検出されたときにプロンプトを表示します。";
-"Meeting detected (%@). Start transcription?" = "会議が検出されました（%@）。文字起こしを開始しますか？";
+"Meeting Notifications" = "ミーティング通知";
+"Notify me about meetings using macOS notifications." = "macOS の通知を使ってミーティングをお知らせします。";
+"Notification Conditions" = "通知条件";
+"Choose when Dahlia sends a meeting notification." = "Dahlia がミーティング通知を送信する条件を選択します。";
+"Meeting app microphone activity" = "ミーティングアプリによるマイク利用";
+"One minute before calendar events" = "カレンダーイベント開始の1分前";
+"This event starts in one minute." = "このイベントは1分後に始まります。";
+"Join and Start Recording" = "参加して録音も開始する";
 "Start Transcription" = "文字起こしを開始";
-"Start transcribing" = "文字起こしを開始";
-"Manage notification settings" = "通知設定を管理";
-"Dismiss" = "閉じる";
 "Meeting detected" = "ミーティングが検出されました";
 "Meeting detected in %@" = "%@ でミーティングが検出されました";
-"Microphone is in use" = "マイクが使用されています";
 "No screenshots yet." = "スクリーンショットはまだありません。";
 
 /* Keychain */

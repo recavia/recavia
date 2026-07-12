@@ -198,7 +198,7 @@
 "App Language" = "App Language";
 "Set the display language for the app." = "Set the display language for the app.";
 "Follow System" = "Follow System";
-"Manage meeting detection prompts and related notification behavior." = "Manage meeting detection prompts and related notification behavior.";
+"Choose one or both conditions. Calendar notifications use events from enabled calendar sources." = "Choose one or both conditions. Calendar notifications use events from enabled calendar sources.";
 "Choose which languages appear when starting transcription." = "Choose which languages appear when starting transcription.";
 "Transcript Translation" = "Transcript Translation";
 "Show translated transcript lines in the selected target language when available." = "Show translated transcript lines in the selected target language when available.";
@@ -391,16 +391,17 @@
 "Quit Dahlia" = "Quit Dahlia";
 
 /* Meeting Detection */
-"Meeting Detection" = "Meeting Detection";
-"Show a prompt when a video meeting is detected." = "Show a prompt when a video meeting is detected.";
-"Meeting detected (%@). Start transcription?" = "Meeting detected (%@). Start transcription?";
+"Meeting Notifications" = "Meeting Notifications";
+"Notify me about meetings using macOS notifications." = "Notify me about meetings using macOS notifications.";
+"Notification Conditions" = "Notification Conditions";
+"Choose when Dahlia sends a meeting notification." = "Choose when Dahlia sends a meeting notification.";
+"Meeting app microphone activity" = "Meeting app microphone activity";
+"One minute before calendar events" = "One minute before calendar events";
+"This event starts in one minute." = "This event starts in one minute.";
+"Join and Start Recording" = "Join and Start Recording";
 "Start Transcription" = "Start Transcription";
-"Start transcribing" = "Start transcribing";
-"Manage notification settings" = "Manage notification settings";
-"Dismiss" = "Dismiss";
 "Meeting detected" = "Meeting detected";
 "Meeting detected in %@" = "Meeting detected in %@";
-"Microphone is in use" = "Microphone is in use";
 "No screenshots yet." = "No screenshots yet.";
 
 /* Keychain */

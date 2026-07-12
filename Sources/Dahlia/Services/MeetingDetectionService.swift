@@ -3,26 +3,11 @@ import Combine
 import CoreAudio
 import CoreGraphics
 import Foundation
-import SwiftUI
 
-/// マイク使用検出 + ミーティングアプリ検出 + ウィンドウタイトル解析の 3 層で
-/// ビデオ会議を検出し、最前面ポップアップで文字起こし開始を促す。
+/// マイク使用・ミーティングアプリ・ウィンドウタイトルを組み合わせて会議を検出し、
+/// カレンダー予定とともに macOS の標準通知へ接続する。
 @MainActor
 final class MeetingDetectionService: ObservableObject {
-
-    // MARK: - Published State
-
-    @Published var detectedMeeting: DetectedMeeting?
-
-    // MARK: - External Dependencies
-
-    var isRecording: () -> Bool = { false }
-    var onOpenMeeting: (DetectedMeeting) -> Void = { _ in }
-    var onStartTranscription: (DetectedMeeting) -> Void = { _ in }
-    var onManageNotifications: () -> Void = {}
-
-    // MARK: - Constants
-
     private static let meetingBundleIDs: Set = [
         "us.zoom.xos",
         "com.microsoft.teams2",
@@ -42,49 +27,206 @@ final class MeetingDetectionService: ObservableObject {
         ("Cisco Webex", "Webex"),
     ]
 
-    private static let meetCodeRegex = try! NSRegularExpression(pattern: "[a-z]{3}-[a-z]{4}-[a-z]{3}")
+    private static let meetCodeRegex: NSRegularExpression = {
+        do {
+            return try NSRegularExpression(pattern: "[a-z]{3}-[a-z]{4}-[a-z]{3}")
+        } catch {
+            preconditionFailure("Invalid Google Meet code regular expression: \(error)")
+        }
+    }()
 
     private static let browserNames: Set = [
         "Google Chrome", "Safari", "Microsoft Edge", "Arc", "Firefox",
         "Brave Browser", "Chromium", "Vivaldi", "Opera",
     ]
 
-    // MARK: - Private State
+    var isRecording: () -> Bool = { false }
 
     /// 監視中のデバイス ID とリスナーブロックのペア。除去時に同じ参照を渡す必要がある。
     private var deviceListeners: [(id: AudioDeviceID, block: AudioObjectPropertyListenerBlock)] = []
-    /// デバイスリスト変更リスナーブロック。
     private var deviceListChangeBlock: AudioObjectPropertyListenerBlock?
     @Published private var isMicrophoneInUse = false
     @Published private var activeMeetingAppName: String?
     @Published private var windowDetectedMeetingName: String?
     private var suppressed = false
-    private var cancellables = Set<AnyCancellable>()
+    private var microphoneNotificationAttemptID: UUID?
+    private var notificationSettingsSignature: String?
+    private var detectionCancellables = Set<AnyCancellable>()
+    private var lifecycleCancellables = Set<AnyCancellable>()
     private var windowScanTimer: Timer?
     private var workspaceObservers: [NSObjectProtocol] = []
-    private var autoDismissTask: Task<Void, Never>?
-    private var panel: NSPanel?
-    private var panelCloseObserver: NSObjectProtocol?
-    /// CoreAudio リスナーコールバック用の共有キュー。
+    private var calendarRefreshTask: Task<Void, Never>?
+    private var calendarSettingsRefreshTask: Task<Void, Never>?
+    private var calendarSchedulingTask: Task<Void, Never>?
+    private var notificationAuthorizationTask: Task<Void, Never>?
+    private var isStarted = false
+    private var isMicrophoneDetectionRunning = false
+    /// CoreAudio のリスナー API が専用 DispatchQueue を要求するために使用する。
     private let micMonitorQueue = DispatchQueue(label: "com.dahlia.micMonitor")
+    private let notificationService: MeetingNotificationService
     private let now: () -> Date
 
-    init(now: @escaping () -> Date = Date.init) {
+    init(
+        notificationService: MeetingNotificationService = .shared,
+        now: @escaping () -> Date = { .now }
+    ) {
+        self.notificationService = notificationService
         self.now = now
     }
 
-    // MARK: - Lifecycle
-
     func start() {
-        guard AppSettings.shared.meetingDetectionEnabled else { return }
+        guard !isStarted else {
+            reconcileSettings()
+            return
+        }
+
+        isStarted = true
+        observeSettings()
+        observeCalendarEvents()
+        startCalendarRefreshLoop()
+        reconcileSettings()
+    }
+
+    func stop() {
+        guard isStarted else { return }
+        isStarted = false
+        lifecycleCancellables.removeAll()
+        stopMicrophoneDetection()
+        calendarRefreshTask?.cancel()
+        calendarRefreshTask = nil
+        calendarSettingsRefreshTask?.cancel()
+        calendarSettingsRefreshTask = nil
+        calendarSchedulingTask?.cancel()
+        calendarSchedulingTask = nil
+        notificationAuthorizationTask?.cancel()
+        notificationAuthorizationTask = nil
+        notificationSettingsSignature = nil
+
+        Task {
+            await notificationService.cancelCalendarNotifications()
+        }
+    }
+
+    private func observeSettings() {
+        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.reconcileSettings()
+                }
+            }
+            .store(in: &lifecycleCancellables)
+    }
+
+    private func observeCalendarEvents() {
+        Publishers.CombineLatest(
+            GoogleCalendarStore.shared.$upcomingEvents,
+            MacCalendarStore.shared.$upcomingEvents
+        )
+        .debounce(for: .milliseconds(250), scheduler: DispatchQueue.main)
+        .sink { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.rescheduleCalendarNotifications()
+            }
+        }
+        .store(in: &lifecycleCancellables)
+    }
+
+    private func reconcileSettings() {
+        guard isStarted else { return }
+        let settings = AppSettings.shared
+        let settingsSignature = [
+            settings.meetingDetectionEnabled.description,
+            settings.microphoneMeetingNotificationsEnabled.description,
+            settings.calendarEventMeetingNotificationsEnabled.description,
+            settings.enabledCalendarSourcesJSON,
+            settings.appLanguageRawValue,
+        ].joined(separator: "|")
+        guard notificationSettingsSignature != settingsSignature else { return }
+        notificationSettingsSignature = settingsSignature
+
+        let shouldDetectMicrophone = settings.meetingDetectionEnabled
+            && settings.microphoneMeetingNotificationsEnabled
+
+        if shouldDetectMicrophone {
+            startMicrophoneDetection()
+        } else {
+            stopMicrophoneDetection()
+        }
+
+        notificationService.refreshCategories()
+        notificationAuthorizationTask?.cancel()
+        if settings.meetingDetectionEnabled,
+           settings.microphoneMeetingNotificationsEnabled,
+           !settings.calendarEventMeetingNotificationsEnabled {
+            notificationAuthorizationTask = Task {
+                _ = await notificationService.requestAuthorizationIfNeeded()
+            }
+        }
+
+        calendarSettingsRefreshTask?.cancel()
+        if settings.meetingDetectionEnabled, settings.calendarEventMeetingNotificationsEnabled {
+            calendarSettingsRefreshTask = Task { [weak self] in
+                await self?.refreshEnabledCalendarSources()
+            }
+        }
+
+        rescheduleCalendarNotifications()
+    }
+
+    private func startCalendarRefreshLoop() {
+        calendarRefreshTask?.cancel()
+        calendarRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard self != nil else { return }
+                await self?.refreshEnabledCalendarSources()
+
+                do {
+                    try await Task.sleep(for: .seconds(60))
+                } catch {
+                    return
+                }
+            }
+        }
+    }
+
+    private func refreshEnabledCalendarSources() async {
+        let settings = AppSettings.shared
+        guard settings.meetingDetectionEnabled,
+              settings.calendarEventMeetingNotificationsEnabled
+        else { return }
+
+        if settings.isCalendarSourceEnabled(.google) {
+            await GoogleCalendarStore.shared.refreshIfNeeded()
+        }
+        if settings.isCalendarSourceEnabled(.macOS) {
+            await MacCalendarStore.shared.refreshIfNeeded()
+        }
+    }
+
+    private func rescheduleCalendarNotifications() {
+        calendarSchedulingTask?.cancel()
+        let events = selectedUpcomingEvents
+        calendarSchedulingTask = Task { [notificationService] in
+            await notificationService.replaceCalendarNotifications(with: events)
+        }
+    }
+
+    // MARK: - マイク利用による会議検出
+
+    private func startMicrophoneDetection() {
+        guard !isMicrophoneDetectionRunning else { return }
+        isMicrophoneDetectionRunning = true
         startMicrophoneMonitoring()
         startAppMonitoring()
         startWindowTitleScanning()
         startCombinedDetection()
     }
 
-    func stop() {
-        cancellables.removeAll()
+    private func stopMicrophoneDetection() {
+        guard isMicrophoneDetectionRunning else { return }
+        isMicrophoneDetectionRunning = false
+        detectionCancellables.removeAll()
         windowScanTimer?.invalidate()
         windowScanTimer = nil
         removeAllDeviceListeners()
@@ -93,24 +235,16 @@ final class MeetingDetectionService: ObservableObject {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
         workspaceObservers.removeAll()
-        autoDismissTask?.cancel()
-        closePanel()
-        detectedMeeting = nil
+        isMicrophoneInUse = false
+        activeMeetingAppName = nil
+        windowDetectedMeetingName = nil
+        suppressed = false
+        microphoneNotificationAttemptID = nil
     }
-
-    func dismiss() {
-        suppressed = true
-        autoDismissTask?.cancel()
-        closePanel()
-        detectedMeeting = nil
-    }
-
-    // MARK: - Layer 1: マイク使用状態の監視
 
     private func startMicrophoneMonitoring() {
         registerListenersForAllInputDevices()
 
-        // USB マイク抜き差し等でリスナーを再登録
         var address = Self.globalAddress(kAudioHardwarePropertyDevices)
         let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
             Task { @MainActor in
@@ -129,8 +263,7 @@ final class MeetingDetectionService: ObservableObject {
     private func registerListenersForAllInputDevices() {
         removeAllDeviceListeners()
 
-        let inputDevices = Self.getAllInputDevices()
-        for deviceID in inputDevices {
+        for deviceID in Self.getAllInputDevices() {
             var address = Self.globalAddress(kAudioDevicePropertyDeviceIsRunningSomewhere)
             let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
                 Task { @MainActor in
@@ -144,7 +277,6 @@ final class MeetingDetectionService: ObservableObject {
         recheckAllDevices()
     }
 
-    /// 全入力デバイスの状態を再チェックし、いずれかが使用中なら true にする。
     private func recheckAllDevices() {
         let running = Self.getAllInputDevices().contains { Self.isDeviceRunningSomewhere($0) }
         if isMicrophoneInUse != running {
@@ -152,6 +284,7 @@ final class MeetingDetectionService: ObservableObject {
         }
         if !running {
             suppressed = false
+            microphoneNotificationAttemptID = nil
         }
     }
 
@@ -168,28 +301,32 @@ final class MeetingDetectionService: ObservableObject {
         var address = Self.globalAddress(kAudioHardwarePropertyDevices)
         AudioObjectRemovePropertyListenerBlock(
             AudioObjectID(kAudioObjectSystemObject),
-            &address, micMonitorQueue, block
+            &address,
+            micMonitorQueue,
+            block
         )
         deviceListChangeBlock = nil
     }
 
-    // MARK: - Layer 2: ミーティングアプリの起動監視
-
     private func startAppMonitoring() {
-        let nc = NSWorkspace.shared.notificationCenter
-
-        let launchObserver = nc.addObserver(
+        let notificationCenter = NSWorkspace.shared.notificationCenter
+        let launchObserver = notificationCenter.addObserver(
             forName: NSWorkspace.didLaunchApplicationNotification,
-            object: nil, queue: .main
+            object: nil,
+            queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.checkRunningMeetingApps() }
+            Task { @MainActor in
+                self?.checkRunningMeetingApps()
+            }
         }
-
-        let terminateObserver = nc.addObserver(
+        let terminateObserver = notificationCenter.addObserver(
             forName: NSWorkspace.didTerminateApplicationNotification,
-            object: nil, queue: .main
+            object: nil,
+            queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.checkRunningMeetingApps() }
+            Task { @MainActor in
+                self?.checkRunningMeetingApps()
+            }
         }
 
         workspaceObservers = [launchObserver, terminateObserver]
@@ -198,15 +335,14 @@ final class MeetingDetectionService: ObservableObject {
 
     private func checkRunningMeetingApps() {
         let name = NSWorkspace.shared.runningApplications.first { app in
-            guard let bid = app.bundleIdentifier else { return false }
-            return Self.meetingBundleIDs.contains(bid)
+            guard let bundleIdentifier = app.bundleIdentifier else { return false }
+            return Self.meetingBundleIDs.contains(bundleIdentifier)
         }?.localizedName
+
         if activeMeetingAppName != name {
             activeMeetingAppName = name
         }
     }
-
-    // MARK: - Layer 3: ウィンドウタイトル解析
 
     private func startWindowTitleScanning() {
         windowScanTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
@@ -218,15 +354,12 @@ final class MeetingDetectionService: ObservableObject {
     }
 
     private func scanWindowTitles() {
-        // 検出不要な状態ではスキャンを省略
-        guard !suppressed, detectedMeeting == nil, !isRecording() else { return }
+        guard !suppressed, !isRecording() else { return }
         let detected = Self.detectMeetingFromWindowTitles()
         if windowDetectedMeetingName != detected {
             windowDetectedMeetingName = detected
         }
     }
-
-    // MARK: - 3層統合検出
 
     private func startCombinedDetection() {
         Publishers.CombineLatest3(
@@ -236,30 +369,50 @@ final class MeetingDetectionService: ObservableObject {
         )
         .debounce(for: .seconds(2), scheduler: DispatchQueue.main)
         .sink { [weak self] micActive, meetingApp, windowMeeting in
-            self?.evaluateDetection(
-                micActive: micActive,
-                meetingApp: meetingApp,
-                windowMeeting: windowMeeting
-            )
+            Task { @MainActor [weak self] in
+                self?.evaluateDetection(
+                    micActive: micActive,
+                    meetingApp: meetingApp,
+                    windowMeeting: windowMeeting
+                )
+            }
         }
-        .store(in: &cancellables)
+        .store(in: &detectionCancellables)
     }
 
     private func evaluateDetection(micActive: Bool, meetingApp: String?, windowMeeting: String?) {
-        guard AppSettings.shared.meetingDetectionEnabled,
+        let settings = AppSettings.shared
+        guard settings.meetingDetectionEnabled,
+              settings.microphoneMeetingNotificationsEnabled,
               !isRecording(),
               !suppressed,
-              detectedMeeting == nil,
+              microphoneNotificationAttemptID == nil,
               micActive,
               meetingApp != nil || windowMeeting != nil
         else { return }
 
+        let attemptID = UUID()
+        microphoneNotificationAttemptID = attemptID
         let appName = windowMeeting ?? meetingApp ?? ""
-        let bundleID = NSWorkspace.shared.runningApplications.first {
+        let bundleIdentifier = NSWorkspace.shared.runningApplications.first {
             $0.localizedName == appName
         }?.bundleIdentifier ?? "unknown"
+        let calendarEvent = recentCalendarEvent()
+        let meeting = DetectedMeeting(
+            title: calendarEvent?.resolvedMeetingTitle ?? L10n.newMeeting,
+            appName: appName,
+            bundleIdentifier: bundleIdentifier,
+            calendarEvent: calendarEvent
+        )
 
-        showMeetingPopup(appName: appName, bundleIdentifier: bundleID)
+        Task { [weak self, notificationService] in
+            let wasDelivered = await notificationService.deliverMicrophoneDetection(meeting)
+            guard let self, self.microphoneNotificationAttemptID == attemptID else { return }
+            self.microphoneNotificationAttemptID = nil
+            if wasDelivered {
+                self.suppressed = true
+            }
+        }
     }
 
     // MARK: - CoreAudio Helpers
@@ -274,27 +427,34 @@ final class MeetingDetectionService: ObservableObject {
 
     private nonisolated static func getAllInputDevices() -> [AudioDeviceID] {
         var address = globalAddress(kAudioHardwarePropertyDevices)
-        var propSize: UInt32 = 0
+        var propertySize: UInt32 = 0
         guard AudioObjectGetPropertyDataSize(
             AudioObjectID(kAudioObjectSystemObject),
-            &address, 0, nil, &propSize
+            &address,
+            0,
+            nil,
+            &propertySize
         ) == noErr else { return [] }
 
-        let count = Int(propSize) / MemoryLayout<AudioDeviceID>.size
+        let count = Int(propertySize) / MemoryLayout<AudioDeviceID>.size
         var devices = [AudioDeviceID](repeating: 0, count: count)
         guard AudioObjectGetPropertyData(
             AudioObjectID(kAudioObjectSystemObject),
-            &address, 0, nil, &propSize, &devices
+            &address,
+            0,
+            nil,
+            &propertySize,
+            &devices
         ) == noErr else { return [] }
 
         return devices.filter { device in
-            var inputAddr = AudioObjectPropertyAddress(
+            var inputAddress = AudioObjectPropertyAddress(
                 mSelector: kAudioDevicePropertyStreams,
                 mScope: kAudioObjectPropertyScopeInput,
                 mElement: kAudioObjectPropertyElementMain
             )
             var streamSize: UInt32 = 0
-            AudioObjectGetPropertyDataSize(device, &inputAddr, 0, nil, &streamSize)
+            AudioObjectGetPropertyDataSize(device, &inputAddress, 0, nil, &streamSize)
             return streamSize > 0
         }
     }
@@ -313,12 +473,13 @@ final class MeetingDetectionService: ObservableObject {
 
     private static func detectMeetingFromWindowTitles() -> String? {
         guard let windows = CGWindowListCopyWindowInfo(
-            [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
         ) as? [[String: Any]] else { return nil }
 
-        for w in windows {
-            guard let owner = w[kCGWindowOwnerName as String] as? String,
-                  let title = w[kCGWindowName as String] as? String,
+        for window in windows {
+            guard let owner = window[kCGWindowOwnerName as String] as? String,
+                  let title = window[kCGWindowName as String] as? String,
                   !title.isEmpty
             else { continue }
 
@@ -334,116 +495,6 @@ final class MeetingDetectionService: ObservableObject {
             }
         }
         return nil
-    }
-
-    // MARK: - Floating Panel
-
-    private func showMeetingPopup(appName: String, bundleIdentifier: String) {
-        let calendarEvent = recentCalendarEvent()
-        let meeting = DetectedMeeting(
-            title: meetingTitle(for: calendarEvent),
-            appName: appName,
-            bundleIdentifier: bundleIdentifier,
-            calendarEvent: calendarEvent
-        )
-        detectedMeeting = meeting
-
-        closePanel()
-
-        let popupView = MeetingDetectionPopupView(
-            meeting: meeting,
-            onOpen: { [weak self] in
-                self?.onOpenMeeting(meeting)
-                self?.dismiss()
-            },
-            onStart: { [weak self] in
-                self?.onStartTranscription(meeting)
-                self?.dismiss()
-            },
-            onManageNotifications: { [weak self] in
-                self?.onManageNotifications()
-                self?.dismiss()
-            },
-            onDismiss: { [weak self] in
-                self?.dismiss()
-            }
-        )
-
-        let hostingView = NSHostingView(rootView: popupView)
-        hostingView.setFrameSize(hostingView.fittingSize)
-
-        let panelRect = panelFrame(for: hostingView.fittingSize)
-        let newPanel = NSPanel(
-            contentRect: panelRect,
-            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        newPanel.isFloatingPanel = true
-        newPanel.level = .floating
-        newPanel.titlebarAppearsTransparent = true
-        newPanel.titleVisibility = .hidden
-        newPanel.isMovableByWindowBackground = true
-        newPanel.isOpaque = false
-        newPanel.backgroundColor = .clear
-        newPanel.hasShadow = false
-        newPanel.contentView = hostingView
-        newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        newPanel.animationBehavior = .utilityWindow
-
-        panelCloseObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification,
-            object: newPanel,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.detectedMeeting = nil
-                self?.suppressed = true
-            }
-        }
-
-        newPanel.alphaValue = 0
-        newPanel.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.3
-            newPanel.animator().alphaValue = 1
-        }
-
-        panel = newPanel
-
-        autoDismissTask?.cancel()
-        autoDismissTask = Task {
-            try? await Task.sleep(for: .seconds(30))
-            guard !Task.isCancelled else { return }
-            dismiss()
-        }
-    }
-
-    private func closePanel() {
-        if let observer = panelCloseObserver {
-            NotificationCenter.default.removeObserver(observer)
-            panelCloseObserver = nil
-        }
-        guard let existingPanel = panel else { return }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            existingPanel.animator().alphaValue = 0
-        } completionHandler: { [existingPanel] in
-            Task { @MainActor in
-                existingPanel.close()
-            }
-        }
-        panel = nil
-    }
-
-    private func panelFrame(for size: NSSize) -> NSRect {
-        guard let screen = NSScreen.main else {
-            return NSRect(origin: .zero, size: size)
-        }
-        let visibleFrame = screen.visibleFrame
-        let x = visibleFrame.midX - size.width / 2
-        let y = visibleFrame.maxY - size.height - 12
-        return NSRect(x: x, y: y, width: size.width, height: size.height)
     }
 
     private func recentCalendarEvent() -> CalendarEvent? {
@@ -475,7 +526,6 @@ final class MeetingDetectionService: ObservableObject {
         if settings.isCalendarSourceEnabled(.google) {
             events.append(contentsOf: GoogleCalendarStore.shared.upcomingEvents)
         }
-
         if settings.isCalendarSourceEnabled(.macOS) {
             events.append(contentsOf: MacCalendarStore.shared.upcomingEvents)
         }
@@ -483,8 +533,4 @@ final class MeetingDetectionService: ObservableObject {
         return events.deduplicatedAcrossSources()
     }
 
-    private func meetingTitle(for calendarEvent: CalendarEvent?) -> String {
-        let trimmed = calendarEvent?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? L10n.newMeeting : trimmed
-    }
 }

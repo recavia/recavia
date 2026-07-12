@@ -238,6 +238,8 @@ final class AppSettings: ObservableObject {
     // MARK: - 会議検出設定
 
     @AppStorage("meetingDetectionEnabled") var meetingDetectionEnabled = true
+    @AppStorage("microphoneMeetingNotificationsEnabled") var microphoneMeetingNotificationsEnabled = true
+    @AppStorage("calendarEventMeetingNotificationsEnabled") var calendarEventMeetingNotificationsEnabled = false
 
     // MARK: - カレンダー設定
 

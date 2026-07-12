@@ -5,7 +5,7 @@ enum CalendarEventPlatform {
     static let macOSCalendar = "MacOSCalendar"
 }
 
-struct CalendarEvent: Identifiable, Equatable {
+struct CalendarEvent: Identifiable, Equatable, Codable {
     let id: String
     let calendarID: String
     let calendarName: String
@@ -48,6 +48,13 @@ struct CalendarEvent: Identifiable, Equatable {
         self.endDate = endDate
         self.isAllDay = isAllDay
         self.meetingURL = meetingURL
+    }
+}
+
+extension CalendarEvent {
+    var resolvedMeetingTitle: String {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedTitle.isEmpty ? L10n.newMeeting : trimmedTitle
     }
 }
 

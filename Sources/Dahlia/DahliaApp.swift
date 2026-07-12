@@ -135,17 +135,26 @@ struct DahliaApp: App {
         sidebarViewModel.updateVaultLastOpened(vault.id)
         viewModel.prepareAnalyzer()
         meetingDetectionService.isRecording = { [weak viewModel] in viewModel?.isListening ?? false }
-        meetingDetectionService.onOpenMeeting = { meeting in
-            handleDetectedMeeting(meeting, in: db, startTranscription: false)
-        }
-        meetingDetectionService.onStartTranscription = { meeting in
-            handleDetectedMeeting(meeting, in: db, startTranscription: true)
-        }
-        meetingDetectionService.onManageNotifications = {
-            SettingsNavigation.open(.general)
-        }
+        MeetingNotificationService.shared.configure(
+            onOpenMeeting: { meeting in
+                handleDetectedMeeting(meeting, in: db, startTranscription: false)
+            },
+            onStartRecording: { meeting in
+                handleDetectedMeeting(meeting, in: db, startTranscription: true)
+            },
+            onJoinAndStartRecording: { meeting in
+                joinAndStartRecording(meeting, in: db)
+            }
+        )
         meetingDetectionService.start()
         showVaultPicker = false
+    }
+
+    private func joinAndStartRecording(_ meeting: DetectedMeeting, in db: AppDatabaseManager) {
+        handleDetectedMeeting(meeting, in: db, startTranscription: true)
+        if let meetingURL = meeting.calendarEvent?.meetingURL {
+            NSWorkspace.shared.open(meetingURL)
+        }
     }
 
     private func handleDetectedMeeting(
@@ -226,6 +235,7 @@ struct DahliaApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_: Notification) {
+        MeetingNotificationService.shared.install()
         ErrorReportingService.start()
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
