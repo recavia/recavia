@@ -268,7 +268,11 @@ extension RecordingSessionController {
         sessionId: UUID
     ) -> AudioCaptureUnexpectedStopHandler {
         { [weak self] error in
-            let message = error?.localizedDescription ?? L10n.systemAudioCaptureStopped
+            let fallbackMessage: String = switch source {
+            case .microphone: L10n.microphoneCaptureStopped
+            case .system: L10n.systemAudioCaptureStopped
+            }
+            let message = error?.localizedDescription ?? fallbackMessage
             Task {
                 await self?.handleUnexpectedCaptureStop(
                     source: source,

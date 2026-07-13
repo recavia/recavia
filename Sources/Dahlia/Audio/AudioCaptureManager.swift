@@ -24,13 +24,29 @@ enum AudioCaptureError: Error, LocalizedError {
 
 /// AVAudioEngine を使用してマイクからオーディオをキャプチャし、
 /// 指定されたターゲットフォーマットに変換して AVAudioPCMBuffer で出力する。
-final class AudioCaptureManager {
+final class AudioCaptureManager: NSObject {
     private let engine = AVAudioEngine()
     private var converter: AVAudioConverter?
     private var captureFormat: AVAudioFormat?
+    private var didReportUnexpectedStop = false
 
     /// 変換済み AVAudioPCMBuffer のコールバック（オーディオスレッドから呼ばれる）
     var onAudioBuffer: ((AVAudioPCMBuffer) -> Void)?
+    var onUnexpectedStop: (() -> Void)?
+
+    override init() {
+        super.init()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(engineConfigurationDidChange),
+            name: .AVAudioEngineConfigurationChange,
+            object: engine
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
 
     /// マイクのパーミッションを確認・要求する。
     static func requestMicrophonePermission() async -> Bool {
@@ -115,6 +131,7 @@ final class AudioCaptureManager {
         selectedDeviceID: AudioDeviceID? = nil,
         bufferSize: AVAudioFrameCount = 4096
     ) throws {
+        didReportUnexpectedStop = false
         self.captureFormat = targetFormat
         let inputNode = engine.inputNode
 
@@ -152,6 +169,14 @@ final class AudioCaptureManager {
         engine.stop()
         converter = nil
         captureFormat = nil
+    }
+
+    @objc private func engineConfigurationDidChange() {
+        guard captureFormat != nil,
+              !engine.isRunning,
+              !didReportUnexpectedStop else { return }
+        didReportUnexpectedStop = true
+        onUnexpectedStop?()
     }
 
     private func processAudioBuffer(_ inputBuffer: AVAudioPCMBuffer) {

@@ -793,6 +793,13 @@ enum L10n {
     static func actionItemUpdateFailed(_ error: String) -> String { String(localized: "Could not update action item: \(error)", bundle: bundle) }
     static var speechRecognitionNotReady: String { String(localized: "Speech recognition is not ready", bundle: bundle) }
     static var systemAudioCaptureStopped: String { String(localized: "System audio capture stopped", bundle: bundle) }
+    static var microphoneCaptureStopped: String { String(localized: "Microphone capture stopped", bundle: bundle) }
+    static var automaticallyStopRecording: String { String(localized: "Automatically Stop Recording", bundle: bundle) }
+    static var recording: String { String(localized: "Recording", bundle: bundle) }
+    static var automaticallyStopRecordingDescription: String { String(
+        localized: "Stop and save the recording when Dahlia's microphone capture stops unexpectedly.",
+        bundle: bundle
+    ) }
 
     // MARK: - Sidebar Footer
 

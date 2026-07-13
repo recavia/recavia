@@ -393,6 +393,10 @@
 "Could not update action item: %@" = "Could not update action item: %@";
 "Speech recognition is not ready" = "Speech recognition is not ready";
 "System audio capture stopped" = "System audio capture stopped";
+"Microphone capture stopped" = "Microphone capture stopped";
+"Automatically Stop Recording" = "Automatically Stop Recording";
+"Recording" = "Recording";
+"Stop and save the recording when Dahlia's microphone capture stops unexpectedly." = "Stop and save the recording when Dahlia's microphone capture stops unexpectedly.";
 
 /* Sidebar Footer */
 "Switch Vault" = "Switch Vault";

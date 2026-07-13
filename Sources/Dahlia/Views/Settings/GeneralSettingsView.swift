@@ -75,6 +75,14 @@ struct GeneralSettingsView: View {
             } footer: {
                 Text(L10n.notificationSettingsDescription)
             }
+
+            Section(L10n.recording) {
+                Toggle(isOn: $settings.automaticallyStopRecordingWhenMicrophoneStops) {
+                    Text(L10n.automaticallyStopRecording)
+                    Text(L10n.automaticallyStopRecordingDescription)
+                }
+                .toggleStyle(.switch)
+            }
         }
         .formStyle(.grouped)
     }

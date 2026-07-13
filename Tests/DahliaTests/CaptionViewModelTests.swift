@@ -55,6 +55,34 @@ import GRDB
         }
 
         @Test
+        func microphoneCaptureStopOnlyStopsRecordingWhenEnabled() {
+            #expect(CaptionViewModel.shouldStopRecording(
+                afterFailureFrom: .microphone,
+                isFatal: false,
+                autoStopOnMicrophoneFailure: true
+            ))
+            #expect(!CaptionViewModel.shouldStopRecording(
+                afterFailureFrom: .microphone,
+                isFatal: false,
+                autoStopOnMicrophoneFailure: false
+            ))
+            #expect(!CaptionViewModel.shouldStopRecording(
+                afterFailureFrom: .system,
+                isFatal: false,
+                autoStopOnMicrophoneFailure: true
+            ))
+        }
+
+        @Test
+        func fatalCaptureFailureAlwaysStopsRecording() {
+            #expect(CaptionViewModel.shouldStopRecording(
+                afterFailureFrom: .system,
+                isFatal: true,
+                autoStopOnMicrophoneFailure: false
+            ))
+        }
+
+        @Test
         func unsupportedLocaleFallsBackToPreferredSupportedLanguageVariant() {
             let supportedLocales = [
                 Locale(identifier: "en_AU"),

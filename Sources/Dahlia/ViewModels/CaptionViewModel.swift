@@ -2483,10 +2483,22 @@ final class CaptionViewModel: ObservableObject {
                snapshot.sessionId == recordingSessionId {
                 self.activeControllerSources = snapshot.enabledSources
             }
-            if isFatal {
+            if Self.shouldStopRecording(
+                afterFailureFrom: source,
+                isFatal: isFatal,
+                autoStopOnMicrophoneFailure: AppSettings.shared.automaticallyStopRecordingWhenMicrophoneStops
+            ) {
                 self.stopListening()
             }
         }
+    }
+
+    nonisolated static func shouldStopRecording(
+        afterFailureFrom source: RecordingAudioSource?,
+        isFatal: Bool,
+        autoStopOnMicrophoneFailure: Bool
+    ) -> Bool {
+        isFatal || (source == .microphone && autoStopOnMicrophoneFailure)
     }
 
     private func handleLiveSubtitleSettingChange(isEnabled: Bool) {

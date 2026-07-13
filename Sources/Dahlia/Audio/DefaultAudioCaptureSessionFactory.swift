@@ -15,7 +15,10 @@ struct DefaultAudioCaptureSessionFactory: AudioCaptureSessionFactory {
     ) -> any AudioCaptureSession {
         switch pipeline.source {
         case .microphone:
-            MicrophoneAudioCaptureSession(pipeline: pipeline)
+            MicrophoneAudioCaptureSession(
+                pipeline: pipeline,
+                onUnexpectedStop: onUnexpectedStop
+            )
         case .system:
             SystemAudioCaptureSession(
                 pipeline: pipeline,

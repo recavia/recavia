@@ -393,6 +393,10 @@
 "Could not update action item: %@" = "アクションアイテムを更新できませんでした: %@";
 "Speech recognition is not ready" = "音声認識が準備されていません";
 "System audio capture stopped" = "システム音声キャプチャが停止しました";
+"Microphone capture stopped" = "マイクのキャプチャが停止しました";
+"Automatically Stop Recording" = "録音を自動停止";
+"Recording" = "録音";
+"Stop and save the recording when Dahlia's microphone capture stops unexpectedly." = "Dahlia のマイクキャプチャが予期せず停止したときに、録音を停止して保存します。";
 
 /* Sidebar Footer */
 "Switch Vault" = "保管庫を切り替え";
