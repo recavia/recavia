@@ -600,8 +600,14 @@ private struct MeetingSidebarRow: View {
                         .onSubmit(onCommitRename)
                         .onExitCommand(perform: onCancelRename)
                 } else {
-                    Text(displayTitle)
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text(displayTitle)
+                            .lineLimit(1)
+
+                        if let calendarEvent = item.calendarEvent {
+                            CalendarEventOriginIcon(event: calendarEvent)
+                        }
+                    }
                 }
 
                 HStack(spacing: 6) {
@@ -667,10 +673,14 @@ private struct MeetingSidebarRow: View {
     }
 
     private var accessibilityLabel: String {
+        var components = [displayTitle]
         if isActiveRecording {
-            return "\(displayTitle), \(L10n.recordingNow)"
+            components.append(L10n.recordingNow)
         }
-        return displayTitle
+        if let calendarEvent = item.calendarEvent {
+            components.append(L10n.calendarEventOrigin(calendarEvent.resolvedTitle))
+        }
+        return components.joined(separator: ", ")
     }
 }
 

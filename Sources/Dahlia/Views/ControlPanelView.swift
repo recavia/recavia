@@ -295,6 +295,7 @@ private struct MeetingDetailHeader: View {
     var sidebarViewModel: SidebarViewModel
     let title: String
     let metadataText: String
+    let calendarEvent: CalendarEventDisplayInfo?
     @Binding var isEditing: Bool
     @Binding var editingName: String
     @FocusState.Binding var isFocused: Bool
@@ -336,6 +337,10 @@ private struct MeetingDetailHeader: View {
         VStack(alignment: .leading, spacing: 8) {
             FlowLayout(spacing: 8, rowSpacing: 8) {
                 MeetingMetadataPill(systemImage: "calendar", text: metadataText)
+
+                if let calendarEvent {
+                    CalendarEventOriginIcon(event: calendarEvent)
+                }
 
                 MeetingProjectPicker(
                     viewModel: viewModel,
@@ -412,6 +417,7 @@ struct ControlPanelView: View {
                     sidebarViewModel: sidebarViewModel,
                     title: meetingTitle,
                     metadataText: meetingMetadataText,
+                    calendarEvent: displayedCalendarEvent,
                     isEditing: $isEditingMeetingName,
                     editingName: $editingMeetingName,
                     isFocused: $isMeetingNameFieldFocused,
@@ -682,6 +688,11 @@ struct ControlPanelView: View {
     private var currentMeetingItem: MeetingOverviewItem? {
         guard let meetingId = viewModel.currentMeetingId else { return nil }
         return sidebarViewModel.allMeetings.first(where: { $0.meetingId == meetingId })
+    }
+
+    private var displayedCalendarEvent: CalendarEventDisplayInfo? {
+        currentMeetingItem?.calendarEvent
+            ?? viewModel.draftMeeting?.linkedCalendarEvent.map { CalendarEventDisplayInfo(event: $0) }
     }
 
     private var screenshotTimeBase: Date {

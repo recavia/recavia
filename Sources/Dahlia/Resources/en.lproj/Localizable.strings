@@ -260,6 +260,8 @@
 "Show events from the Calendar app on this Mac." = "Show events from the Calendar app on this Mac.";
 "Upcoming schedule" = "Upcoming schedule";
 "Show Upcoming Schedule" = "Show Upcoming Schedule";
+"From calendar event" = "From calendar event";
+"Calendar event: %@" = "Calendar event: %@";
 "Select a calendar event to prepare transcription." = "Select a calendar event to prepare transcription.";
 "Connect a Google account and choose which calendars appear on Home." = "Connect a Google account and choose which calendars appear on Home.";
 "Use events from the Calendar app on this Mac." = "Use events from the Calendar app on this Mac.";
