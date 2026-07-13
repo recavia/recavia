@@ -163,7 +163,7 @@ private struct ScreenshotThumbnailView: View {
             }
         }
         .padding(6)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8))
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
         .task(id: screenshot.id) {
             thumbnailImage = nil
             thumbnailImage = await Self.makeThumbnail(from: screenshot.imageData)
