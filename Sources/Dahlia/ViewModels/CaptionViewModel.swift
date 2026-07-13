@@ -2467,8 +2467,13 @@ final class CaptionViewModel: ObservableObject {
     ) {
         guard activeRecordingSessionId == recordingSessionId else { return }
         errorMessage = message
+        let shouldStopRecording = Self.shouldStopRecording(
+            afterFailureFrom: source,
+            isFatal: isFatal,
+            autoStopOnMicrophoneFailure: AppSettings.shared.automaticallyStopRecordingWhenMicrophoneStops
+        )
         if case .starting = recordingLifecycle {
-            if isFatal {
+            if shouldStopRecording {
                 pendingRealtimeRecognitionFailure = (source, message)
             } else {
                 pendingLiveSubtitleWarning = message
@@ -2483,11 +2488,7 @@ final class CaptionViewModel: ObservableObject {
                snapshot.sessionId == recordingSessionId {
                 self.activeControllerSources = snapshot.enabledSources
             }
-            if Self.shouldStopRecording(
-                afterFailureFrom: source,
-                isFatal: isFatal,
-                autoStopOnMicrophoneFailure: AppSettings.shared.automaticallyStopRecordingWhenMicrophoneStops
-            ) {
+            if shouldStopRecording {
                 self.stopListening()
             }
         }
