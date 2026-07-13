@@ -15,6 +15,7 @@ struct MeetingOverviewItem: Equatable, FetchableRecord, Identifiable {
     var segmentCount: Int
     var latestSegmentText: String?
     var tags: [TagInfo]
+    var calendarEvent: CalendarEventDisplayInfo?
 
     var id: UUID { meetingId }
 
@@ -34,7 +35,8 @@ struct MeetingOverviewItem: Equatable, FetchableRecord, Identifiable {
         hasSummary: Bool,
         segmentCount: Int,
         latestSegmentText: String?,
-        tags: [TagInfo]
+        tags: [TagInfo],
+        calendarEvent: CalendarEventDisplayInfo? = nil
     ) {
         self.meetingId = meetingId
         self.vaultId = vaultId
@@ -48,6 +50,7 @@ struct MeetingOverviewItem: Equatable, FetchableRecord, Identifiable {
         self.segmentCount = segmentCount
         self.latestSegmentText = latestSegmentText
         self.tags = tags
+        self.calendarEvent = calendarEvent
     }
 
     init(row: Row) throws {
@@ -72,6 +75,27 @@ struct MeetingOverviewItem: Equatable, FetchableRecord, Identifiable {
             }
         } else {
             tags = []
+        }
+
+        let calendarEventTitle: String? = row["calendarEventTitle"]
+        let calendarEventDescription: String? = row["calendarEventDescription"]
+        let calendarEventStart: Date? = row["calendarEventStart"]
+        let calendarEventEnd: Date? = row["calendarEventEnd"]
+        let calendarEventIsAllDay: Bool? = row["calendarEventIsAllDay"]
+        if let calendarEventTitle,
+           let calendarEventDescription,
+           let calendarEventStart,
+           let calendarEventEnd,
+           let calendarEventIsAllDay {
+            calendarEvent = CalendarEventDisplayInfo(
+                title: calendarEventTitle,
+                description: calendarEventDescription,
+                startDate: calendarEventStart,
+                endDate: calendarEventEnd,
+                isAllDay: calendarEventIsAllDay
+            )
+        } else {
+            calendarEvent = nil
         }
     }
 

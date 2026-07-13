@@ -171,6 +171,11 @@ final class SidebarViewModel {
                     meetings.status AS status,
                     meetings.duration AS duration,
                     meetings.createdAt AS createdAt,
+                    calendar_events.title AS calendarEventTitle,
+                    calendar_events.description AS calendarEventDescription,
+                    calendar_events.start AS calendarEventStart,
+                    calendar_events.end AS calendarEventEnd,
+                    calendar_events.is_all_day AS calendarEventIsAllDay,
                     EXISTS(SELECT 1 FROM summaries WHERE summaries.meetingId = meetings.id) AS hasSummary,
                     COUNT(segments.id) AS segmentCount,
                     (
@@ -186,6 +191,9 @@ final class SidebarViewModel {
                      WHERE mt.meetingId = meetings.id) AS tags
                 FROM meetings
                 LEFT JOIN projects ON projects.id = meetings.projectId
+                LEFT JOIN calendar_events
+                  ON calendar_events.ical_uid = meetings.calendar_event_ical_uid
+                 AND calendar_events.recurrence_id = meetings.calendar_event_recurrence_id
                 LEFT JOIN transcript_segments AS segments ON segments.meetingId = meetings.id
                 WHERE meetings.vaultId = ?
                 GROUP BY meetings.id

@@ -523,6 +523,12 @@ enum L10n {
     ) }
     static var calendarScheduleTitle: String { String(localized: "Upcoming schedule", bundle: bundle) }
     static var showUpcomingSchedule: String { String(localized: "Show Upcoming Schedule", bundle: bundle) }
+    static var calendarEventOriginTitle: String { String(localized: "From calendar event", bundle: bundle) }
+
+    static func calendarEventOrigin(_ title: String) -> String {
+        String(localized: "Calendar event: \(title)", bundle: bundle)
+    }
+
     static var calendarScheduleDescription: String { String(
         localized: "Select a calendar event to prepare transcription.",
         bundle: bundle
