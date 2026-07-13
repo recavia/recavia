@@ -191,6 +191,23 @@ import GRDB
         }
 
         @Test
+        func movingMeetingsPreservesSummaryPathsOutsideDeletedHierarchy() throws {
+            let context = try makeContext()
+            defer { try? FileManager.default.removeItem(at: context.rootURL) }
+
+            let source = try context.service.createProject(leafName: "Source", parentProjectId: nil)
+            let destination = try context.service.createProject(leafName: "Destination", parentProjectId: nil)
+            let meeting = try insertMeeting(projectId: source.id, context: context)
+            try insertSummary(meetingId: meeting.id, path: "Archive/Summary.md", context: context)
+
+            try context.service.deleteProjectHierarchy(id: source.id, meetingDisposition: .move(to: destination.id))
+
+            let fetchedSummary = try context.repository.fetchSummary(forMeetingId: meeting.id)
+            let summary = try #require(fetchedSummary)
+            #expect(summary.vaultRelativePath == "Archive/Summary.md")
+        }
+
+        @Test
         func deletesMeetingsAndDependentContentWithHierarchy() throws {
             let context = try makeContext()
             defer { try? FileManager.default.removeItem(at: context.rootURL) }

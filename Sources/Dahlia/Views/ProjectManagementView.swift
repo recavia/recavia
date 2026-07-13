@@ -112,9 +112,28 @@ struct ProjectManagementView: View {
         .searchable(text: $projectSearchText, prompt: L10n.searchProjects)
         .toolbar {
             ToolbarItem {
-                Button(L10n.newProject, systemImage: "plus", action: presentProjectCreation)
-                    .disabled(AppSettings.shared.currentVault == nil || selectedProject?.missingOnDisk == true)
-                    .help(selectedProject == nil ? L10n.newProject : L10n.newSubproject)
+                if let selectedProject {
+                    Menu(L10n.newProject, systemImage: "plus") {
+                        Button(
+                            L10n.newSubproject,
+                            systemImage: "folder.badge.plus",
+                            action: presentSubprojectCreation
+                        )
+                        .disabled(selectedProject.missingOnDisk)
+
+                        Button(
+                            L10n.newTopLevelProject,
+                            systemImage: "externaldrive.badge.plus",
+                            action: presentTopLevelProjectCreation
+                        )
+                    }
+                    .disabled(AppSettings.shared.currentVault == nil)
+                    .help(L10n.newProject)
+                } else {
+                    Button(L10n.newProject, systemImage: "plus", action: presentTopLevelProjectCreation)
+                        .disabled(AppSettings.shared.currentVault == nil)
+                        .help(L10n.newProject)
+                }
             }
         }
         .alert(L10n.newProject, isPresented: $isShowingProjectCreation) {
@@ -270,8 +289,17 @@ private extension ProjectManagementView {
         selectedProjectId = sidebarViewModel.allProjectItems.first?.projectId
     }
 
-    private func presentProjectCreation() {
-        projectCreationParentId = selectedProject?.projectId
+    private func presentSubprojectCreation() {
+        guard let selectedProject else { return }
+        presentProjectCreation(parentProjectId: selectedProject.projectId)
+    }
+
+    private func presentTopLevelProjectCreation() {
+        presentProjectCreation(parentProjectId: nil)
+    }
+
+    private func presentProjectCreation(parentProjectId: UUID?) {
+        projectCreationParentId = parentProjectId
         newProjectName = ""
         isShowingProjectCreation = true
     }

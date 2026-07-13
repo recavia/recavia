@@ -64,6 +64,7 @@ enum L10n {
     static var ask: String { String(localized: "Ask", bundle: bundle) }
     static var newProject: String { String(localized: "New Project", bundle: bundle) }
     static var newSubproject: String { String(localized: "New Subproject", bundle: bundle) }
+    static var newTopLevelProject: String { String(localized: "New Project at Vault Top", bundle: bundle) }
 
     static func projectCreationLocation(_ name: String) -> String {
         String(localized: "Create a subproject inside \(name).", bundle: bundle)

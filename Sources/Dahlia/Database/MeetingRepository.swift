@@ -661,7 +661,11 @@ extension MeetingRepository {
                     _ = try MeetingRecord
                         .filter(meetingIds.contains(Column("id")))
                         .updateAll(db, Column("projectId").set(to: destinationId))
-                    try SummaryRecord.clearVaultRelativePaths(meetingIds: meetingIds, in: db)
+                    try SummaryRecord.clearVaultRelativePaths(
+                        meetingIds: meetingIds,
+                        underProjectPrefix: name,
+                        in: db
+                    )
                 }
             case .deleteMeetings:
                 if !meetingIds.isEmpty {

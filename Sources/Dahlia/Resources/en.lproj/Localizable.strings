@@ -33,6 +33,7 @@
 "Ask" = "Ask";
 "New Project" = "New Project";
 "New Subproject" = "New Subproject";
+"New Project at Vault Top" = "New Project at Vault Top";
 "Create a subproject inside %@." = "Create a subproject inside %@.";
 "Create a project at the top level of the vault." = "Create a project at the top level of the vault.";
 "Could Not Create Project" = "Could Not Create Project";
