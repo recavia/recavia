@@ -2,6 +2,7 @@
 set -euo pipefail
 
 APP_NAME="Dahlia"
+DMG_NAME="${APP_NAME}.dmg"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 APP_BUNDLE="${PROJECT_DIR}/${APP_NAME}.app"
@@ -53,10 +54,9 @@ echo "=== Building signed app ==="
 echo "=== Verifying signature ==="
 codesign -dvvv --entitlements - --xml "$APP_BUNDLE"
 
-MARKETING_VERSION="$(read_marketing_version "${APP_BUNDLE}/Contents/Info.plist")"
-DMG_PATH="${DMG_PATH:-${PROJECT_DIR}/${APP_NAME}-${MARKETING_VERSION}.dmg}"
-if [[ "$DMG_PATH" != *.dmg ]]; then
-    echo "error: DMG_PATH must end in .dmg: ${DMG_PATH}" >&2
+DMG_PATH="${DMG_PATH:-${PROJECT_DIR}/${DMG_NAME}}"
+if [ "$(basename "$DMG_PATH")" != "$DMG_NAME" ]; then
+    echo "error: release DMG filename must be: ${DMG_NAME}" >&2
     exit 1
 fi
 

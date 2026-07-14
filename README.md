@@ -37,10 +37,10 @@ swift build && swift run
 # Run tests
 swift test
 
-# Build, sign, notarize, and staple a versioned DMG
+# Build, sign, notarize, and staple Dahlia.dmg
 ./scripts/notarize.sh
 
-# Create the matching GitHub Release and attach the notarized DMG
+# Generate human-friendly notes with AI and create the matching GitHub Release
 ./scripts/create-github-release.sh
 
 # Format and lint
@@ -72,7 +72,7 @@ xcrun notarytool store-credentials "dahlia-notary" \
   --password "APP_SPECIFIC_PASSWORD"
 ```
 
-`./scripts/notarize.sh` uses `NOTARY_PROFILE` (default: `dahlia-notary`) and produces a signed, notarized, and stapled `Dahlia-<version>.dmg` ready for distribution. The version comes from `CFBundleShortVersionString` in `Resources/Info.plist`.
+`./scripts/notarize.sh` uses `NOTARY_PROFILE` (default: `dahlia-notary`) and produces a signed, notarized, and stapled `Dahlia.dmg` ready for distribution.
 
 To publish a release, install and authenticate the GitHub CLI (`gh`), commit and push the version change and all other source changes, then run:
 
@@ -81,7 +81,7 @@ To publish a release, install and authenticate the GitHub CLI (`gh`), commit and
 ./scripts/create-github-release.sh
 ```
 
-`create-github-release.sh` verifies the DMG signature, notarization ticket, filename, and disk image integrity. It then creates `v<version>` at the current commit (or verifies an existing tag points there), creates the corresponding GitHub Release with generated notes, and uploads the DMG. It refuses to publish from a dirty working tree.
+`create-github-release.sh` verifies the DMG signature, notarization ticket, fixed `Dahlia.dmg` filename, embedded app version, and disk image integrity. It then asks Codex to use the repository's `$generate-release-notes` skill to interpret the changes since the previous release and write concise, user-focused notes. The Codex subprocess runs outside the sandbox so it can use local authentication, but ignores personal configuration, requires approval for untrusted commands, and limits its task to read-only investigation and Markdown output. Finally, the script creates `v<version>` at the current commit (or verifies an existing tag points there), creates the corresponding GitHub Release, and uploads the DMG. It requires an authenticated Codex CLI by default; pass `--notes-file <path>` to publish reviewed Markdown instead. It refuses to publish from a dirty working tree. The latest release is always available directly from <https://github.com/mats16/dahlia/releases/latest/download/Dahlia.dmg>.
 
 ## Architecture
 

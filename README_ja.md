@@ -37,10 +37,10 @@ swift build && swift run
 # テスト
 swift test
 
-# バージョン付き DMG のビルド + 署名 + notarization + staple
+# Dahlia.dmg のビルド + 署名 + notarization + staple
 ./scripts/notarize.sh
 
-# 対応する GitHub Release を作成し、公証済み DMG を添付
+# AI で読みやすいノートを生成し、対応する GitHub Release を作成
 ./scripts/create-github-release.sh
 
 # 整形 + Lint
@@ -72,7 +72,7 @@ xcrun notarytool store-credentials "dahlia-notary" \
   --password "APP_SPECIFIC_PASSWORD"
 ```
 
-`./scripts/notarize.sh` は `NOTARY_PROFILE` 環境変数（既定値: `dahlia-notary`）を使い、署名・notarization・staple 済みの `Dahlia-<version>.dmg` を作成します。バージョンは `Resources/Info.plist` の `CFBundleShortVersionString` から取得します。
+`./scripts/notarize.sh` は `NOTARY_PROFILE` 環境変数（既定値: `dahlia-notary`）を使い、署名・notarization・staple 済みの `Dahlia.dmg` を作成します。
 
 リリースを公開するには GitHub CLI（`gh`）をインストールして認証し、バージョン変更を含むすべてのソース変更をコミットして push してから、次を実行します。
 
@@ -81,7 +81,7 @@ xcrun notarytool store-credentials "dahlia-notary" \
 ./scripts/create-github-release.sh
 ```
 
-`create-github-release.sh` は DMG の署名、公証チケット、ファイル名、ディスクイメージの整合性を検証します。その後、現在のコミットに `v<version>` タグを作成（既存タグがある場合は同じコミットを指すことを確認）し、自動生成したリリースノートを含む GitHub Release を作成して DMG を添付します。作業ツリーに未コミットの変更がある場合は公開しません。
+`create-github-release.sh` は DMG の署名、公証チケット、固定ファイル名 `Dahlia.dmg`、内包アプリのバージョン、ディスクイメージの整合性を検証します。その後、Codex にリポジトリ内の `$generate-release-notes` スキルを使わせ、前回のリリース以降の変更を解釈した簡潔でユーザー目線のリリースノートを生成します。Codex のサブプロセスはローカルの認証情報を利用できるようサンドボックス外で実行しますが、個人設定を読み込まず、信頼されていないコマンドには承認を必須とし、読み取り専用の調査と Markdown 出力だけを行うよう制約します。最後に、スクリプトが現在のコミットに `v<version>` タグを作成（既存タグがある場合は同じコミットを指すことを確認）し、GitHub Release を作成して DMG を添付します。既定では認証済みの Codex CLI が必要です。レビュー済みの Markdown を使う場合は `--notes-file <path>` を指定できます。作業ツリーに未コミットの変更がある場合は公開しません。最新版は常に <https://github.com/mats16/dahlia/releases/latest/download/Dahlia.dmg> から直接ダウンロードできます。
 
 ## アーキテクチャ
 
