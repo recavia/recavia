@@ -8,7 +8,7 @@ A macOS native real-time transcription app. Captures microphone and system audio
 
 - **Dual Audio Capture** — Record microphone (AVAudioEngine) and system audio (ScreenCaptureKit) at the same time
 - **On-Device Transcription** — Real-time speech-to-text using Apple Speech framework
-- **LLM Summaries** — Generate structured summaries via OpenAI-compatible API (optional)
+- **Codex Summaries** — Generate structured summaries through the bundled Codex app-server (optional)
 - **Project Management** — Organize transcripts into vault/project hierarchy synced with filesystem folders
 - **Meeting Detection** — Automatically detect meeting sessions with 3-layer detection
 - **Screenshot Capture** — Attach screenshots to transcripts for multimodal summaries
@@ -17,15 +17,17 @@ A macOS native real-time transcription app. Captures microphone and system audio
 ## Requirements
 
 - macOS 26+
+- Apple Silicon (arm64)
 - Swift 6.2
 - Xcode 26+ (for Swift toolchain)
+- Rust 1.95.0 via rustup (for signed app bundles)
 
-Databricks AI Gateway supports either a Personal Access Token or OAuth U2M through the Databricks CLI. For OAuth, install a current CLI release and run `databricks auth login` in Terminal once to create a profile, then select it in Model Settings. Dahlia reads short-lived OAuth tokens on demand with `databricks auth token`; it does not store them itself. If the selected profile is logged out or its session has expired, Dahlia runs `databricks auth login --profile <name>` and opens the browser for reauthentication before retrying the token request.
+Dahlia keeps its bundled Codex state and authentication separate from other Codex apps and the Codex CLI. Sign in explicitly from **Settings → AI Connection** before generating a summary. The browser-based ChatGPT login is stored under Dahlia's Application Support directory.
 
 ## Build & Run
 
 ```bash
-# Debug build and run (unsigned)
+# Debug build and run (unsigned; bundled Codex summaries unavailable)
 swift build && swift run
 
 # Debug build with code signing (enables Data Protection Keychain + Touch ID)
@@ -47,7 +49,7 @@ swift test
 ./scripts/lint.sh
 ```
 
-> **Note:** `swift run` produces an unsigned binary and cannot use Data Protection Keychain. Use `run-dev.sh` for full functionality.
+> **Note:** `swift run` has no bundled Codex helper and cannot use Data Protection Keychain. Use `run-dev.sh` for full functionality. On its first run, the app-bundle scripts fetch the pinned Codex source and build Codex 0.144.4 with Cargo for `aarch64-apple-darwin`.
 
 If you set `SENTRY_DSN` before running `build-app.sh` or `notarize.sh`, the generated release app embeds the DSN into `Info.plist` and enables Sentry when launched from Finder. Debug runs remain disabled, so `swift run` and `run-dev.sh` do not send Sentry events by default.
 
@@ -109,7 +111,7 @@ Sources/Dahlia/
 ├── Audio/          # Audio capture (mic & system)
 ├── Database/       # GRDB models, migrations, repository
 ├── Models/         # Domain models
-├── Services/       # LLM, vault sync, meeting detection, keychain
+├── Services/       # Codex app-server, vault sync, meeting detection, keychain
 ├── Speech/         # Speech transcription pipeline
 ├── Utilities/      # Helpers (UUID v7, localization, etc.)
 ├── ViewModels/     # CaptionViewModel, SidebarViewModel

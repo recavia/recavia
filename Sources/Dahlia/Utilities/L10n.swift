@@ -884,6 +884,88 @@ enum L10n {
     static var gpt56Terra: String { String(localized: "GPT-5.6 Terra", bundle: bundle) }
     static var gpt56Luna: String { String(localized: "GPT-5.6 Luna", bundle: bundle) }
     static var gpt55: String { String(localized: "GPT-5.5", bundle: bundle) }
+    static var codexHelperNotBundled: String { String(
+        localized: "The bundled Codex helper is unavailable. Run Dahlia with scripts/run-dev.sh or install a signed app build.",
+        bundle: bundle
+    ) }
+    static func codexLaunchFailed(_ detail: String) -> String { String(
+        localized: "Could not start Codex: \(detail)",
+        bundle: bundle
+    ) }
+    static var codexNotLoggedIn: String { String(
+        localized: "Codex is not signed in. Open AI Connection in Settings and sign in, then try again.",
+        bundle: bundle
+    ) }
+    static func codexLoginFailed(_ detail: String) -> String { String(
+        localized: "Codex sign-in failed: \(detail)",
+        bundle: bundle
+    ) }
+    static var codexLoginFailedWithoutDetail: String { String(localized: "Codex sign-in failed.", bundle: bundle) }
+    static var codexLoginPageCouldNotOpen: String { String(
+        localized: "Could not open the Codex sign-in page.",
+        bundle: bundle
+    ) }
+    static var codexProcessExited: String { String(localized: "Codex app-server exited unexpectedly.", bundle: bundle) }
+    static func codexProcessExitedWithDetail(_ detail: String) -> String { String(
+        localized: "Codex app-server exited unexpectedly: \(detail)",
+        bundle: bundle
+    ) }
+    static func codexRequestTimedOut(_ operation: String) -> String { String(
+        localized: "Codex did not respond in time (\(operation)). Try again.",
+        bundle: bundle
+    ) }
+    static var codexInvalidResponse: String { String(localized: "Codex returned an invalid response.", bundle: bundle) }
+    static func codexRequestFailed(_ detail: String) -> String { String(
+        localized: "Codex request failed: \(detail)",
+        bundle: bundle
+    ) }
+    static var codexTurnFailed: String { String(localized: "Codex could not complete the request.", bundle: bundle) }
+    static var codexTurnInterrupted: String { String(localized: "Codex generation was interrupted.", bundle: bundle) }
+    static var codexModelDoesNotSupportImages: String { String(
+        localized: "The selected Codex model does not support screenshot input.",
+        bundle: bundle
+    ) }
+    static var codexUnknownError: String { String(localized: "Unknown Codex app-server error.", bundle: bundle) }
+    static var codexVersion: String { String(localized: "Codex Version", bundle: bundle) }
+    static var codexAccount: String { String(localized: "Codex Account", bundle: bundle) }
+    static var codexAppServer: String { String(localized: "Codex app-server", bundle: bundle) }
+    static var codexAccountDescription: String { String(
+        localized: "Dahlia stores a separate Codex sign-in for this app. Signing in opens your browser.",
+        bundle: bundle
+    ) }
+    static var codexSignedIn: String { String(localized: "Signed in to Codex", bundle: bundle) }
+    static func codexSignedInAs(_ account: String) -> String { String(
+        localized: "Signed in to Codex as \(account)",
+        bundle: bundle
+    ) }
+    static var codexNotSignedIn: String { String(localized: "Not signed in to Codex", bundle: bundle) }
+    static var codexSignInNotRequired: String { String(localized: "Codex does not require sign-in", bundle: bundle) }
+    static var signInWithChatGPT: String { String(localized: "Sign in with ChatGPT", bundle: bundle) }
+    static var codexWaitingForBrowserSignIn: String { String(localized: "Waiting for browser sign-in…", bundle: bundle) }
+    static var cancelSignIn: String { String(localized: "Cancel Sign-In", bundle: bundle) }
+    static var signOut: String { String(localized: "Sign Out", bundle: bundle) }
+    static var codexNoModels: String { String(localized: "Codex returned no available models. Try again.", bundle: bundle) }
+    static var codexModelDescription: String { String(
+        localized: "Models are loaded from the bundled Codex app-server.",
+        bundle: bundle
+    ) }
+    static var reasoningEffort: String { String(localized: "Reasoning Effort", bundle: bundle) }
+    static var reasoningEffortDescription: String { String(
+        localized: "Controls how much reasoning Codex uses for each summary.",
+        bundle: bundle
+    ) }
+    static var reasoningEffortNone: String { String(localized: "None", bundle: bundle) }
+    static var reasoningEffortMinimal: String { String(localized: "Minimal", bundle: bundle) }
+    static var reasoningEffortLow: String { String(localized: "Low", bundle: bundle) }
+    static var reasoningEffortMedium: String { String(localized: "Medium", bundle: bundle) }
+    static var reasoningEffortHigh: String { String(localized: "High", bundle: bundle) }
+    static var reasoningEffortExtraHigh: String { String(localized: "Extra High", bundle: bundle) }
+    static var reasoningEffortMax: String { String(localized: "Max", bundle: bundle) }
+    static var reasoningEffortUltra: String { String(localized: "Ultra", bundle: bundle) }
+    static var codexSummaryModelFooter: String { String(
+        localized: "The saved model is used when available; otherwise Codex's default model is selected.",
+        bundle: bundle
+    ) }
     static var maxTokens: String { String(localized: "Maximum Output Tokens", bundle: bundle) }
     static var maxTokensDescription: String { String(
         localized: "Limits the number of tokens generated for each summary.",

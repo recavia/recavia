@@ -1994,11 +1994,6 @@ final class CaptionViewModel: ObservableObject {
     ) async {
         guard !transcriptText.isEmpty else { return }
 
-        guard AppSettings.shared.isLLMConfigComplete else {
-            summaryError = L10n.llmConfigIncomplete
-            return
-        }
-
         // 要約前にノートを即座に保存してから取得
         saveNoteImmediately()
         let currentNoteText = noteText

@@ -21,20 +21,35 @@ export CLANG_MODULE_CACHE_PATH="${TMPDIR:-/tmp}/dahlia-clang-module-cache"
 mkdir -p "$CLANG_MODULE_CACHE_PATH"
 
 echo "=== Building ${APP_NAME} (debug) ==="
-swift build
+bash "${SCRIPT_DIR}/build-codex.sh"
+swift build --arch arm64
 
-BUILD_DIR=".build/debug"
+BUILD_DIR="$(swift build --arch arm64 --show-bin-path)"
 APP_BUNDLE="${APP_NAME}.app"
 CONTENTS="${APP_BUNDLE}/Contents"
 MACOS="${CONTENTS}/MacOS"
+HELPERS="${CONTENTS}/Helpers"
 ICON_SRC="Sources/Dahlia/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
 ICONSET_DIR="${CONTENTS}/Resources/AppIcon.iconset"
 
 rm -rf "${APP_BUNDLE}"
 mkdir -p "${MACOS}"
 mkdir -p "${CONTENTS}/Resources"
+mkdir -p "${HELPERS}"
+mkdir -p "${CONTENTS}/Resources/Licenses/Codex"
 
 cp "${BUILD_DIR}/${APP_NAME}" "${MACOS}/${APP_NAME}"
+cp ".build/codex-helper/codex" "${HELPERS}/codex"
+cp ".build/codex-helper/LICENSE" "${CONTENTS}/Resources/Licenses/Codex/LICENSE"
+cp ".build/codex-helper/NOTICE.txt" "${CONTENTS}/Resources/Licenses/Codex/NOTICE.txt"
+if [ "$(lipo -archs "${HELPERS}/codex")" != "arm64" ]; then
+    echo "error: bundled Codex must contain only arm64" >&2
+    exit 1
+fi
+if [ "$("${HELPERS}/codex" --version)" != "codex-cli 0.144.4" ]; then
+    echo "error: bundled Codex must report exactly codex-cli 0.144.4" >&2
+    exit 1
+fi
 cp "Resources/Info.plist" "${CONTENTS}/Info.plist"
 configure_google_calendar_plist "${CONTENTS}/Info.plist"
 configure_sentry_plist "${CONTENTS}/Info.plist"
@@ -66,12 +81,18 @@ if [ -d "$SIGNED_RESOURCE_BUNDLE" ]; then
     codesign_path "$SIGNED_RESOURCE_BUNDLE"
 fi
 
+codesign_path "${HELPERS}/codex"
+
 if has_entitlements "$ENTITLEMENTS_PATH"; then
     codesign_path "${MACOS}/${APP_NAME}" --entitlements "$ENTITLEMENTS_PATH"
     codesign_path "${APP_BUNDLE}" --entitlements "$ENTITLEMENTS_PATH"
 else
     codesign_path "${MACOS}/${APP_NAME}"
     codesign_path "${APP_BUNDLE}"
+fi
+if [ "$(lipo -archs "${MACOS}/${APP_NAME}")" != "arm64" ]; then
+    echo "error: Dahlia.app must contain only arm64" >&2
+    exit 1
 fi
 codesign --verify --deep --strict --verbose=2 "${APP_BUNDLE}"
 
