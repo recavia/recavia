@@ -512,10 +512,7 @@ import Foundation
         @Test
         func generationCancellationInterruptsAndUnsubscribesWithoutKillingProcess() async {
             let transport = TestCodexAppServerTransport(mode: .generationBlocks)
-            let service = CodexAppServerService(
-                transportFactory: { transport },
-                summaryTimeout: .seconds(1)
-            )
+            let service = CodexAppServerService(transportFactory: { transport })
             let generation = Task {
                 try await service.generate(.init(
                     model: nil,
