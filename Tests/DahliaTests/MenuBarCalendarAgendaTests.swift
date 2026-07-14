@@ -57,6 +57,25 @@ import Foundation
         }
 
         @Test
+        func distinguishesEventsExcludedByFiltersFromAnEmptyCalendar() {
+            let declined = event(id: "declined", start: 3_600, end: 7_200, isDeclined: true)
+
+            let filteredAgenda = MenuBarCalendarAgenda(
+                googleEvents: [declined],
+                macEvents: [],
+                enabledSources: [.google],
+                filter: CalendarEventFilter(includesDeclinedEvents: false),
+                now: now,
+                calendar: calendar
+            )
+            let emptyAgenda = agenda(googleEvents: [])
+
+            #expect(filteredAgenda.events.isEmpty)
+            #expect(filteredAgenda.hasEventsExcludedByFilter)
+            #expect(!emptyAgenda.hasEventsExcludedByFilter)
+        }
+
+        @Test
         func prioritizesMostRecentlyStartedOngoingEventThenNextEvent() {
             let earlierOngoing = event(id: "earlier", start: -1_800, end: 3_600)
             let laterOngoing = event(id: "later", start: -600, end: 1_800)

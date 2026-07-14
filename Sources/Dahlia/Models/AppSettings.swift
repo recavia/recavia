@@ -99,6 +99,10 @@ final class AppSettings: ObservableObject, GoogleDriveExportFolderSettingsProvid
     fileprivate nonisolated static let defaultAutomaticScreenshotChangeThresholdPercent = 20
     nonisolated static let defaultLLMMaxTokens = 16000
 
+    init() {
+        Self.migrateCalendarEventFilterSettings(in: .standard)
+    }
+
     // MARK: - 表示言語
 
     @AppStorage(AppLanguage.userDefaultsKey) var appLanguageRawValue: String = AppLanguage.system.rawValue
@@ -287,8 +291,8 @@ final class AppSettings: ObservableObject, GoogleDriveExportFolderSettingsProvid
     @AppStorage("calendarSource") var calendarSourceRawValue = CalendarSource.google.rawValue
     @AppStorage(CalendarSource.enabledSourcesUserDefaultsKey) var enabledCalendarSourcesJSON = CalendarSource.defaultEnabledSourcesJSON
     @AppStorage("includesAllDayCalendarEvents") var includesAllDayCalendarEvents = false
-    @AppStorage("includesCalendarEventsWithoutOtherAttendees") var includesCalendarEventsWithoutOtherAttendees = false
-    @AppStorage("includesCalendarEventsWithoutConferenceURI") var includesCalendarEventsWithoutConferenceURI = false
+    @AppStorage("includesCalendarEventsWithoutOtherAttendees") var includesCalendarEventsWithoutOtherAttendees = true
+    @AppStorage("includesCalendarEventsWithoutConferenceURI") var includesCalendarEventsWithoutConferenceURI = true
     @AppStorage("includesDeclinedCalendarEvents") var includesDeclinedCalendarEvents = false
     @AppStorage("includesOutOfOfficeCalendarEvents") var includesOutOfOfficeCalendarEvents = false
     @AppStorage("menuBarCalendarEnabled") var menuBarCalendarEnabled = true
@@ -311,6 +315,21 @@ final class AppSettings: ObservableObject, GoogleDriveExportFolderSettingsProvid
             includesDeclinedEvents: includesDeclinedCalendarEvents,
             includesOutOfOfficeEvents: includesOutOfOfficeCalendarEvents
         )
+    }
+
+    nonisolated static func migrateCalendarEventFilterSettings(in userDefaults: UserDefaults) {
+        let keyPairs = [
+            (legacy: "excludeAllDayCalendarEvents", current: "includesAllDayCalendarEvents"),
+            (legacy: "excludeCalendarEventsWithoutOtherAttendees", current: "includesCalendarEventsWithoutOtherAttendees"),
+            (legacy: "excludeCalendarEventsWithoutConferenceURI", current: "includesCalendarEventsWithoutConferenceURI"),
+            (legacy: "excludeDeclinedCalendarEvents", current: "includesDeclinedCalendarEvents"),
+            (legacy: "excludeOutOfOfficeCalendarEvents", current: "includesOutOfOfficeCalendarEvents"),
+        ]
+
+        for keyPair in keyPairs where userDefaults.object(forKey: keyPair.current) == nil {
+            guard userDefaults.object(forKey: keyPair.legacy) != nil else { continue }
+            userDefaults.set(!userDefaults.bool(forKey: keyPair.legacy), forKey: keyPair.current)
+        }
     }
 
     var enabledCalendarSources: Set<CalendarSource> {

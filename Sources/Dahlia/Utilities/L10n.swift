@@ -1051,7 +1051,7 @@ enum L10n {
     ) }
     static var menuBarCalendarDisplay: String { String(localized: "Show today's events", bundle: bundle) }
     static var menuBarCalendarDisplayDescription: String { String(
-        localized: "Show ongoing and upcoming events in the menu bar popover.",
+        localized: "Show ongoing and upcoming events in the menu bar menu.",
         bundle: bundle
     ) }
     static var menuBarCalendarEventTitle: String { String(localized: "Event title", bundle: bundle) }

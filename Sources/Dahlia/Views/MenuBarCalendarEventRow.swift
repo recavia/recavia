@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuBarCalendarEventRow: View {
     let event: CalendarEvent
     let now: Date
+    let canJoinAndRecord: Bool
     let canJoin: Bool
     let canShowInCalendar: Bool
     let onJoinAndRecord: () -> Void
@@ -12,7 +13,7 @@ struct MenuBarCalendarEventRow: View {
     var body: some View {
         Menu {
             Button(L10n.menuBarJoinMeetingWithRecording, systemImage: "record.circle", action: onJoinAndRecord)
-                .disabled(!canJoin)
+                .disabled(!canJoinAndRecord)
 
             Button(L10n.menuBarJoinMeeting, systemImage: "video.fill", action: onJoin)
                 .disabled(!canJoin)

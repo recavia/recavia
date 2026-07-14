@@ -466,7 +466,7 @@
 "Menu Bar Calendar" = "メニューバーのカレンダー";
 "Choose which event details appear in the menu bar. Calendar selection and event filters above are shared." = "メニューバーに表示する予定の詳細を選びます。表示するカレンダーと予定のフィルタは上の設定を共有します。";
 "Show today's events" = "今日の予定を表示";
-"Show ongoing and upcoming events in the menu bar popover." = "進行中と今後の予定をメニューバーのポップオーバーに表示します。";
+"Show ongoing and upcoming events in the menu bar menu." = "進行中と今後の予定をメニューバーのメニューに表示します。";
 "Event title" = "予定のタイトル";
 "Show the current or next event title in the menu bar." = "進行中または次の予定のタイトルをメニューバーに表示します。";
 "Time remaining" = "開始・終了までの時間";

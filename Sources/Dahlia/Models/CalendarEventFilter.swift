@@ -7,8 +7,8 @@ struct CalendarEventFilter: Equatable {
 
     init(
         includesAllDayEvents: Bool = false,
-        includesEventsWithoutOtherAttendees: Bool = false,
-        includesEventsWithoutConferenceURI: Bool = false,
+        includesEventsWithoutOtherAttendees: Bool = true,
+        includesEventsWithoutConferenceURI: Bool = true,
         includesDeclinedEvents: Bool = false,
         includesOutOfOfficeEvents: Bool = false
     ) {

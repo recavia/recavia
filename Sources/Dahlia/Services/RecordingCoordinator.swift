@@ -89,6 +89,8 @@ final class RecordingCoordinator {
             return
         }
 
+        guard !viewModel.isListening else { return }
+
         sidebarViewModel.clearMeetingSelection()
         viewModel.beginDraftMeeting(
             from: event,
@@ -98,24 +100,24 @@ final class RecordingCoordinator {
     }
 
     func joinCalendarEventAndStartRecording(_ event: CalendarEvent) {
-        startRecording(forCalendarEvent: event)
-        if let conferenceURI = event.conferenceURI {
-            NSWorkspace.shared.open(conferenceURI)
-        }
+        guard startRecording(forCalendarEvent: event),
+              let conferenceURI = event.conferenceURI else { return }
+        NSWorkspace.shared.open(conferenceURI)
     }
 
-    func startRecording(appendingTo meetingId: UUID) {
+    @discardableResult
+    func startRecording(appendingTo meetingId: UUID) -> Bool {
         guard canStartNewMeeting,
               let dbQueue = sidebarViewModel.dbQueue,
               let vault = sidebarViewModel.currentVault else {
             MainWindowOpener.shared.openMainWindow()
-            return
+            return false
         }
 
         let item = sidebarViewModel.allMeetings.first(where: { $0.meetingId == meetingId })
         guard item != nil || viewModel.currentMeetingId == meetingId else {
             MainWindowOpener.shared.openMainWindow()
-            return
+            return false
         }
         let projectName = item?.projectName ?? viewModel.currentProjectName
         let projectId = item?.projectId ?? viewModel.currentProjectId
@@ -132,31 +134,32 @@ final class RecordingCoordinator {
             )
             sidebarViewModel.selectMeeting(meetingId)
         }
+        return true
     }
 
     func stopRecording() {
         viewModel.stopListening()
     }
 
-    private func startRecording(forCalendarEvent event: CalendarEvent) {
+    @discardableResult
+    private func startRecording(forCalendarEvent event: CalendarEvent) -> Bool {
         guard canStartNewMeeting,
               let dbQueue = sidebarViewModel.dbQueue,
               let vault = sidebarViewModel.currentVault else {
             MainWindowOpener.shared.openMainWindow()
-            return
+            return false
         }
 
         let repository = MeetingRepository(dbQueue: dbQueue)
         do {
             if let existingMeetingId = try repository.resolveMeetingIdForCalendarEvent(event, vaultId: vault.id) {
                 sidebarViewModel.selectMeeting(existingMeetingId)
-                startRecording(appendingTo: existingMeetingId)
-                return
+                return startRecording(appendingTo: existingMeetingId)
             }
         } catch {
             viewModel.errorMessage = error.localizedDescription
             ErrorReportingService.capture(error, context: ["source": "calendarEventRecording"])
-            return
+            return false
         }
 
         sidebarViewModel.clearMeetingSelection()
@@ -166,5 +169,6 @@ final class RecordingCoordinator {
             vaultURL: vault.url
         )
         startNewMeeting()
+        return true
     }
 }

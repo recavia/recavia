@@ -6,24 +6,15 @@ struct MenuBarMenuView: View {
     let calendarViewModel: MenuBarCalendarViewModel
 
     @ObservedObject private var settings = AppSettings.shared
-    @ObservedObject private var googleCalendarStore = GoogleCalendarStore.shared
-    @ObservedObject private var macCalendarStore = MacCalendarStore.shared
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        let agenda = MenuBarCalendarAgenda(
-            googleEvents: googleCalendarStore.upcomingEvents,
-            macEvents: macCalendarStore.upcomingEvents,
-            enabledSources: settings.enabledCalendarSources,
-            filter: settings.calendarEventFilter,
-            now: calendarViewModel.currentDate
-        )
-
-        VStack(spacing: 0) {
+        VStack {
             if settings.menuBarCalendarEnabled {
                 MenuBarCalendarSectionView(
-                    agenda: agenda,
+                    agenda: calendarViewModel.agenda,
                     now: calendarViewModel.currentDate,
+                    canStartRecording: recordingCoordinator.canStartNewMeeting,
                     onJoinAndRecordEvent: joinAndRecordEvent,
                     onJoinEvent: joinEvent,
                     onShowEventInCalendar: showEventInCalendar,
@@ -42,7 +33,6 @@ struct MenuBarMenuView: View {
 
             MenuBarAppActionsView()
         }
-        .frame(minWidth: 380, idealWidth: 420, maxWidth: 460)
     }
 
     private func joinAndRecordEvent(_ event: CalendarEvent) {

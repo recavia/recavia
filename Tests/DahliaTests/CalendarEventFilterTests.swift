@@ -15,10 +15,27 @@ import Foundation
             let filter = CalendarEventFilter()
 
             #expect(!filter.includes(makeEvent(isAllDay: true)))
-            #expect(!filter.includes(makeEvent(hasOtherAttendees: false)))
-            #expect(!filter.includes(makeEvent(conferenceURI: nil)))
+            #expect(filter.includes(makeEvent(hasOtherAttendees: false)))
+            #expect(filter.includes(makeEvent(conferenceURI: nil)))
             #expect(!filter.includes(makeEvent(isDeclined: true)))
             #expect(!filter.includes(makeEvent(isOutOfOffice: true)))
+        }
+
+        @Test
+        func migratesLegacyExclusionSettingsWithoutOverwritingCurrentValues() throws {
+            let suiteName = "CalendarEventFilterTests.\(UUID().uuidString)"
+            let defaults = try #require(UserDefaults(suiteName: suiteName))
+            defer { defaults.removePersistentDomain(forName: suiteName) }
+
+            defaults.set(false, forKey: "excludeAllDayCalendarEvents")
+            defaults.set(true, forKey: "excludeCalendarEventsWithoutOtherAttendees")
+            defaults.set(false, forKey: "includesCalendarEventsWithoutConferenceURI")
+
+            AppSettings.migrateCalendarEventFilterSettings(in: defaults)
+
+            #expect(defaults.bool(forKey: "includesAllDayCalendarEvents"))
+            #expect(!defaults.bool(forKey: "includesCalendarEventsWithoutOtherAttendees"))
+            #expect(!defaults.bool(forKey: "includesCalendarEventsWithoutConferenceURI"))
         }
 
         @Test

@@ -466,7 +466,7 @@
 "Menu Bar Calendar" = "Menu Bar Calendar";
 "Choose which event details appear in the menu bar. Calendar selection and event filters above are shared." = "Choose which event details appear in the menu bar. Calendar selection and event filters above are shared.";
 "Show today's events" = "Show today's events";
-"Show ongoing and upcoming events in the menu bar popover." = "Show ongoing and upcoming events in the menu bar popover.";
+"Show ongoing and upcoming events in the menu bar menu." = "Show ongoing and upcoming events in the menu bar menu.";
 "Event title" = "Event title";
 "Show the current or next event title in the menu bar." = "Show the current or next event title in the menu bar.";
 "Time remaining" = "Time remaining";

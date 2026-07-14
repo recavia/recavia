@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuBarCalendarSectionView: View {
     let agenda: MenuBarCalendarAgenda
     let now: Date
+    let canStartRecording: Bool
     let onJoinAndRecordEvent: (CalendarEvent) -> Void
     let onJoinEvent: (CalendarEvent) -> Void
     let onShowEventInCalendar: (CalendarEvent) -> Void
@@ -19,6 +20,7 @@ struct MenuBarCalendarSectionView: View {
                     MenuBarCalendarEventRow(
                         event: event,
                         now: now,
+                        canJoinAndRecord: event.conferenceURI != nil && canStartRecording,
                         canJoin: event.conferenceURI != nil,
                         canShowInCalendar: event.url != nil,
                         onJoinAndRecord: { onJoinAndRecordEvent(event) },
@@ -33,6 +35,9 @@ struct MenuBarCalendarSectionView: View {
                 statusLabel(L10n.calendarLoading, systemImage: "arrow.triangle.2.circlepath")
             } else if let issueTitle = sourceIssueTitle {
                 statusLabel(issueTitle, systemImage: "calendar.badge.exclamationmark")
+                calendarSettingsButton
+            } else if agenda.hasEventsExcludedByFilter {
+                statusLabel(L10n.calendarNoEventsMatchFiltersTitle, systemImage: "line.3.horizontal.decrease.circle")
                 calendarSettingsButton
             } else {
                 statusLabel(L10n.menuBarNoMoreEventsToday, systemImage: "calendar.badge.checkmark")

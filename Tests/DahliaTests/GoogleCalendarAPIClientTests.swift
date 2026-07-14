@@ -193,6 +193,34 @@ struct GoogleCalendarAPIClientTests {
         #expect(transformed?.isAttending == true)
     }
 
+    @Test(arguments: [
+        ", \"organizer\": { \"self\": true }",
+        "",
+    ])
+    func eventPayloadTreatsOrganizerOrMissingAttendeesAsAttending(_ participationJSON: String) throws {
+        let data = Data("""
+        {
+          "items": [
+            {
+              "id": "owned-meeting",
+              "start": { "dateTime": "2026-04-17T01:00:00Z" },
+              "end": { "dateTime": "2026-04-17T02:00:00Z" }
+              \(participationJSON)
+            }
+          ]
+        }
+        """.utf8)
+
+        let response = try JSONDecoder().decode(GoogleCalendarAPIClient.EventListResponse.self, from: data)
+        let item = try #require(response.items.first)
+        let transformed = try GoogleCalendarAPIClient.makeEvent(
+            from: item,
+            calendarItem: GoogleCalendarListItem(id: "primary", title: "Primary", colorHex: nil, isPrimary: true)
+        )
+
+        #expect(transformed?.isAttending == true)
+    }
+
     @Test
     func originalStartTimeUsesItsIANATimeZoneWhenOffsetIsOmitted() throws {
         let data = Data("""

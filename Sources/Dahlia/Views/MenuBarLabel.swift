@@ -1,21 +1,14 @@
 import SwiftUI
 
 struct MenuBarLabel: View {
-    @ObservedObject var viewModel: CaptionViewModel
+    let viewModel: CaptionViewModel
     let calendarViewModel: MenuBarCalendarViewModel
 
     @ObservedObject private var settings = AppSettings.shared
-    @ObservedObject private var googleCalendarStore = GoogleCalendarStore.shared
-    @ObservedObject private var macCalendarStore = MacCalendarStore.shared
+    @State private var isListening = false
 
     var body: some View {
-        let agenda = MenuBarCalendarAgenda(
-            googleEvents: googleCalendarStore.upcomingEvents,
-            macEvents: macCalendarStore.upcomingEvents,
-            enabledSources: settings.enabledCalendarSources,
-            filter: settings.calendarEventFilter,
-            now: calendarViewModel.currentDate
-        )
+        let agenda = calendarViewModel.agenda
         let calendarText = settings.menuBarCalendarEnabled
             ? agenda.labelText(
                 showsTitle: settings.menuBarCalendarShowsEventTitle,
@@ -26,7 +19,7 @@ struct MenuBarLabel: View {
         let calendarAccessibilityLabel = calendarText == nil
             ? L10n.dahlia
             : agenda.accessibilityLabel(now: calendarViewModel.currentDate) ?? L10n.dahlia
-        let accessibilityLabel = viewModel.isListening
+        let accessibilityLabel = isListening
             ? "\(calendarAccessibilityLabel), \(L10n.recordingNow)"
             : calendarAccessibilityLabel
 
@@ -37,22 +30,21 @@ struct MenuBarLabel: View {
                 Label {
                     Text(calendarText)
                 } icon: {
-                    if viewModel.isListening {
+                    if isListening {
                         Image(systemName: "record.circle.fill")
                     } else {
                         MenuBarCalendarParticipationIndicator(isAttending: featuredEvent.isAttending)
                     }
                 }
             } else if settings.menuBarCalendarEnabled {
-                if viewModel.isListening {
-                    Label(L10n.dahlia, systemImage: "record.circle.fill")
-                } else {
-                    Text(calendarText ?? L10n.dahlia)
-                }
+                Label(
+                    L10n.dahlia,
+                    systemImage: isListening ? "record.circle.fill" : "waveform"
+                )
             } else {
                 Label(
                     L10n.dahlia,
-                    systemImage: viewModel.isListening ? "record.circle.fill" : "waveform"
+                    systemImage: isListening ? "record.circle.fill" : "waveform"
                 )
             }
         }
@@ -60,7 +52,9 @@ struct MenuBarLabel: View {
         .lineLimit(1)
         .truncationMode(.tail)
         .accessibilityLabel(accessibilityLabel)
+        .onReceive(viewModel.$isListening) { isListening = $0 }
         .task {
+            isListening = viewModel.isListening
             await calendarViewModel.runRefreshLoop()
         }
     }

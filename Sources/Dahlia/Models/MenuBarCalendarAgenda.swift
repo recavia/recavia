@@ -6,6 +6,7 @@ struct MenuBarCalendarAgenda: Equatable {
     let events: [CalendarEvent]
     let featuredEvent: CalendarEvent?
     let featuredEventIsOngoing: Bool
+    let hasEventsExcludedByFilter: Bool
 
     init(
         googleEvents: [CalendarEvent],
@@ -24,11 +25,14 @@ struct MenuBarCalendarAgenda: Equatable {
         }
 
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
-        events = sourceEvents
+        let currentEvents = sourceEvents
             .deduplicatedAcrossSources()
-            .filter(filter.includes)
             .filter { $0.endDate > now && $0.startDate < tomorrow }
+
+        events = currentEvents
+            .filter(filter.includes)
             .sorted(by: Self.sortEvents)
+        hasEventsExcludedByFilter = events.isEmpty && !currentEvents.isEmpty
 
         let timedEvents = events.filter { !$0.isAllDay }
         if let ongoingEvent = timedEvents

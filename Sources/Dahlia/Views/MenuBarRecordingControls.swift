@@ -7,26 +7,20 @@ struct MenuBarRecordingControls: View {
     @AppStorage("liveSubtitleOverlayEnabled") private var liveSubtitleOverlayEnabled = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack {
             Button(action: toggleRecording) {
                 Label(
                     viewModel.isListening ? L10n.menuBarStopRecording : L10n.menuBarStartRecording,
                     systemImage: viewModel.isListening ? "stop.fill" : "record.circle"
                 )
-                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(viewModel.isListening ? .red : .accentColor)
             .disabled(!viewModel.isListening && !recordingCoordinator.canStartNewMeeting && AppSettings.shared.currentVault != nil)
 
             Toggle(isOn: $liveSubtitleOverlayEnabled) {
                 Label(L10n.menuBarShowLiveSubtitles, systemImage: "text.bubble")
             }
-            .toggleStyle(.switch)
-
             recordingSettingsMenus
         }
-        .padding()
         .onAppear {
             viewModel.refreshAvailableWindows()
         }
@@ -60,7 +54,6 @@ struct MenuBarRecordingControls: View {
             }
         } label: {
             Label(L10n.microphone, systemImage: "mic.fill")
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
 
         Menu {
@@ -77,7 +70,6 @@ struct MenuBarRecordingControls: View {
             }
         } label: {
             Label(L10n.systemAudio, systemImage: "speaker.wave.2.fill")
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
 
         Menu {
@@ -100,7 +92,6 @@ struct MenuBarRecordingControls: View {
             .labelsHidden()
         } label: {
             Label(L10n.language, systemImage: "globe")
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
 
         Menu {
@@ -123,7 +114,6 @@ struct MenuBarRecordingControls: View {
             .labelsHidden()
         } label: {
             Label(L10n.source, systemImage: "rectangle.on.rectangle")
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
