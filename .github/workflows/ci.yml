@@ -49,12 +49,6 @@ jobs:
           xcodebuild -version
           swift --version
 
-      - name: Resolve dependencies
-        run: swift package resolve
-
-      - name: Build
-        run: swift build
-
       - name: Run unit tests
         run: |
           set -o pipefail
@@ -62,3 +56,6 @@ jobs:
 
       - name: Verify tests executed
         run: grep -Eq "Test run with [1-9][0-9]* tests" test-output.log
+
+      - name: Build executable
+        run: swift build
