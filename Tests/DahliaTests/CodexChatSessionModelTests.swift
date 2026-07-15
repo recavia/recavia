@@ -79,6 +79,26 @@ import Foundation
         }
 
         @Test
+        func rolloutWithoutReasoningPreservesStreamedSummary() async {
+            let service = TestCodexChatService(mode: .rolloutWithoutReasoning)
+            let settings = AppSettings()
+            settings.currentVault = Self.testVault()
+            let session = CodexChatSessionModel(
+                modelID: "default-model",
+                effort: "medium",
+                service: service,
+                settings: settings
+            )
+
+            session.draft = "Question"
+            session.sendDraft()
+            await waitUntil { !session.isGenerating }
+
+            #expect(session.messages.last?.text == "Final answer")
+            #expect(session.messages.last?.reasoning == "Considered the question")
+        }
+
+        @Test
         func multipleAgentMessageItemsAreCombinedIntoOneResponse() async {
             let service = TestCodexChatService(mode: .multipleMessages)
             let settings = AppSettings()
@@ -175,6 +195,7 @@ import Foundation
             case complete
             case block
             case staleRollout
+            case rolloutWithoutReasoning
             case multipleMessages
         }
 
@@ -204,6 +225,8 @@ import Foundation
             let assistantMessages: [CodexChatMessage] = switch mode {
             case .complete, .block:
                 [CodexChatMessage(role: .assistant, text: "Final answer", reasoning: "Considered the question")]
+            case .rolloutWithoutReasoning:
+                [CodexChatMessage(role: .assistant, text: "Final answer")]
             case .staleRollout, .multipleMessages:
                 []
             }
@@ -240,7 +263,7 @@ import Foundation
             let (stream, continuation) = AsyncThrowingStream<CodexChatTurnEvent, any Error>.makeStream()
             continuation.yield(.started(turnID: "turn-1"))
             switch mode {
-            case .complete, .staleRollout:
+            case .complete, .staleRollout, .rolloutWithoutReasoning:
                 continuation.yield(.reasoningDelta(
                     itemID: "reasoning-1",
                     summaryIndex: 0,

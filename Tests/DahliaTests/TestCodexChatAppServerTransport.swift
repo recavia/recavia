@@ -58,7 +58,7 @@ actor TestCodexChatAppServerTransport: CodexAppServerTransport {
                 "requiresOpenaiAuth": .bool(true),
             ]))
         case "model/list":
-            enqueueResponse(requestID, result: modelList)
+            enqueueResponse(requestID, result: TestCodexChatFixtures.modelList)
         case "config/read":
             enqueueResponse(requestID, result: .object([
                 "config": .object([
@@ -88,11 +88,11 @@ actor TestCodexChatAppServerTransport: CodexAppServerTransport {
             ]))
         case "thread/read":
             enqueueResponse(requestID, result: .object([
-                "thread": Self.chatThread(id: "thread-history"),
+                "thread": TestCodexChatFixtures.chatThread(id: "thread-history"),
             ]))
         case "thread/resume":
             enqueueResponse(requestID, result: .object([
-                "thread": Self.chatThread(id: "thread-history"),
+                "thread": TestCodexChatFixtures.chatThread(id: "thread-history"),
                 "model": .string("default-model"),
                 "reasoningEffort": .string("high"),
             ]))
@@ -182,9 +182,22 @@ actor TestCodexChatAppServerTransport: CodexAppServerTransport {
             "method": .string("item/completed"),
             "params": turnParams([
                 "item": .object([
+                    "type": .string("commandExecution"),
+                ]),
+            ]),
+        ]))
+        enqueue(.object([
+            "method": .string("item/completed"),
+            "params": turnParams([
+                "item": .object([
                     "id": .string("reasoning-1"),
                     "type": .string("reasoning"),
-                    "summary": .array([.string("Checked the request")]),
+                    "summary": .array([
+                        .object([
+                            "type": .string("summary_text"),
+                            "text": .string("Checked the request"),
+                        ]),
+                    ]),
                     "content": .array([]),
                 ]),
             ]),
@@ -243,34 +256,6 @@ actor TestCodexChatAppServerTransport: CodexAppServerTransport {
         }
     }
 
-    private var modelList: JSONValue {
-        .object([
-            "data": .array([
-                .object([
-                    "id": .string("default"),
-                    "model": .string("default-model"),
-                    "displayName": .string("Default"),
-                    "description": .string("Default model"),
-                    "hidden": .bool(false),
-                    "isDefault": .bool(true),
-                    "supportedReasoningEfforts": .array([
-                        .object([
-                            "reasoningEffort": .string("medium"),
-                            "description": .string("Balanced"),
-                        ]),
-                        .object([
-                            "reasoningEffort": .string("high"),
-                            "description": .string("Deep"),
-                        ]),
-                    ]),
-                    "defaultReasoningEffort": .string("medium"),
-                    "inputModalities": .array([.string("text")]),
-                ]),
-            ]),
-            "nextCursor": .null,
-        ])
-    }
-
     private var inProgressTurn: JSONValue {
         .object([
             "turn": .object([
@@ -280,40 +265,4 @@ actor TestCodexChatAppServerTransport: CodexAppServerTransport {
         ])
     }
 
-    // swiftformat:disable:next modifierOrder
-    nonisolated private static func chatThread(id: String) -> JSONValue {
-        .object([
-            "id": .string(id),
-            "preview": .string("Previous chat"),
-            "turns": .array([
-                .object([
-                    "id": .string("turn-history"),
-                    "status": .string("completed"),
-                    "items": .array([
-                        .object([
-                            "id": .string("user-1"),
-                            "type": .string("userMessage"),
-                            "content": .array([
-                                .object(["type": .string("text"), "text": .string("Question")]),
-                            ]),
-                        ]),
-                        .object([
-                            "id": .string("agent-1"),
-                            "type": .string("agentMessage"),
-                            "text": .string("Answer"),
-                        ]),
-                        .object([
-                            "id": .string("reasoning-1"),
-                            "type": .string("reasoning"),
-                            "summary": .array([
-                                .string("Reviewed the question"),
-                                .string("Prepared the answer"),
-                            ]),
-                            "content": .array([]),
-                        ]),
-                    ]),
-                ]),
-            ]),
-        ])
-    }
 }

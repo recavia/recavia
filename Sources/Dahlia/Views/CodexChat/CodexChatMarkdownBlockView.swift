@@ -12,9 +12,17 @@ struct CodexChatMarkdownBlockView: View {
                 .font(headingFont(for: level))
                 .fontWeight(.semibold)
         case let .unorderedList(items):
-            list(items: items, ordered: false)
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    CodexChatMarkdownListRow(marker: "•", text: item)
+                }
+            }
         case let .orderedList(items):
-            list(items: items, ordered: true)
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    CodexChatMarkdownListRow(marker: item.marker, text: item.text)
+                }
+            }
         case let .blockquote(text):
             HStack(alignment: .top, spacing: 10) {
                 RoundedRectangle(cornerRadius: 1)
@@ -40,19 +48,6 @@ struct CodexChatMarkdownBlockView: View {
             }
         case .divider:
             Divider()
-        }
-    }
-
-    private func list(items: [String], ordered: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(ordered ? "\(index + 1)." : "•")
-                        .frame(minWidth: 14, alignment: .trailing)
-                    markdownText(item)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
         }
     }
 

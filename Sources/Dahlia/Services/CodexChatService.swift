@@ -257,6 +257,7 @@ private extension CodexChatService {
         var messages: [CodexChatMessage] = []
         var assistantItemID: String?
         var assistantTexts: [String] = []
+        var reasoningItemID: String?
         var reasoningTexts: [String] = []
 
         for item in items {
@@ -273,18 +274,17 @@ private extension CodexChatService {
                 assistantItemID = assistantItemID ?? id
                 assistantTexts.append(text)
             case "reasoning":
-                let summaries = object["summary"]?.arrayValue?
-                    .compactMap(\.stringValue)
-                    .compactMap(\.nilIfBlank)
-                reasoningTexts.append(contentsOf: summaries ?? [])
+                reasoningItemID = reasoningItemID ?? id
+                reasoningTexts.append(contentsOf: parseReasoningSummaries(object["summary"]))
             default:
                 continue
             }
         }
 
-        if let assistantItemID, !assistantTexts.isEmpty {
+        if let messageID = assistantItemID ?? reasoningItemID,
+           !assistantTexts.isEmpty || !reasoningTexts.isEmpty {
             messages.append(CodexChatMessage(
-                id: assistantItemID,
+                id: messageID,
                 role: .assistant,
                 text: assistantTexts.joined(separator: "\n\n"),
                 reasoning: reasoningTexts.joined(separator: "\n\n")
@@ -349,26 +349,30 @@ private extension CodexChatService {
         guard let item = params["item"]?.objectValue else {
             throw CodexAppServerError.invalidProtocolResponse
         }
-        guard let itemID = item["id"]?.stringValue,
-              let type = item["type"]?.stringValue
-        else {
-            throw CodexAppServerError.invalidProtocolResponse
-        }
+        guard let type = item["type"]?.stringValue else { return nil }
         switch type {
         case "agentMessage":
-            guard let text = item["text"]?.stringValue else {
+            guard let itemID = item["id"]?.stringValue,
+                  let text = item["text"]?.stringValue
+            else {
                 throw CodexAppServerError.invalidProtocolResponse
             }
             return .completed(itemID: itemID, text: text)
         case "reasoning":
-            let text = item["summary"]?.arrayValue?
-                .compactMap(\.stringValue)
-                .compactMap(\.nilIfBlank)
-                .joined(separator: "\n\n") ?? ""
+            guard let itemID = item["id"]?.stringValue else {
+                throw CodexAppServerError.invalidProtocolResponse
+            }
+            let text = parseReasoningSummaries(item["summary"]).joined(separator: "\n\n")
             return .reasoningCompleted(itemID: itemID, text: text)
         default:
             return nil
         }
+    }
+
+    nonisolated static func parseReasoningSummaries(_ value: JSONValue?) -> [String] {
+        value?.arrayValue?.compactMap { summary in
+            (summary.objectValue?["text"]?.stringValue ?? summary.stringValue)?.nilIfBlank
+        } ?? []
     }
 
     nonisolated static func parseTurnCompletion(_ params: [String: JSONValue]) throws -> CodexChatTurnEvent {

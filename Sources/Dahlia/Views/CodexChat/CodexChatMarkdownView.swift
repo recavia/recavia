@@ -12,6 +12,6 @@ struct CodexChatMarkdownView: View {
     }
 
     private var blocks: [CodexChatMarkdownBlock] {
-        CodexChatMarkdownParser.parse(markdown)
+        CodexChatMarkdownCache.blocks(for: markdown)
     }
 }

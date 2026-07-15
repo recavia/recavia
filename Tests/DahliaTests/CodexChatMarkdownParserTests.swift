@@ -43,8 +43,8 @@
                 "line  ",
                 "hard",
                 "",
-                "1. First",
-                "2. Second",
+                "3. First",
+                "7) Second",
                 "",
                 "> Quoted text",
                 "",
@@ -58,7 +58,10 @@
             #expect(CodexChatMarkdownParser.parse(markdown) == [
                 .heading(level: 2, text: "Heading"),
                 .paragraph("soft line\nhard"),
-                .orderedList(["First", "Second"]),
+                .orderedList([
+                    CodexChatMarkdownOrderedItem(marker: "3.", text: "First"),
+                    CodexChatMarkdownOrderedItem(marker: "7)", text: "Second"),
+                ]),
                 .blockquote("Quoted text"),
                 .code(language: "swift", text: "let value = 1"),
                 .divider,

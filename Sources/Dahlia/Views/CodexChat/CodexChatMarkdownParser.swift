@@ -1,3 +1,5 @@
+import Foundation
+
 enum CodexChatMarkdownParser {
     static func parse(_ markdown: String) -> [CodexChatMarkdownBlock] {
         let normalized = markdown
@@ -40,6 +42,7 @@ enum CodexChatMarkdownParser {
 
     private struct ListMarker {
         let kind: ListKind
+        let orderedMarker: String?
         let content: String
     }
 
@@ -100,6 +103,7 @@ enum CodexChatMarkdownParser {
         kind: ListKind
     ) -> CodexChatMarkdownBlock {
         var items: [String] = []
+        var orderedItems: [CodexChatMarkdownOrderedItem] = []
 
         while index < lines.count {
             guard let marker = listMarker(in: lines[index]), marker.kind == kind else { break }
@@ -123,14 +127,19 @@ enum CodexChatMarkdownParser {
                 index += 1
             }
 
-            items.append(joinedText(itemLines))
+            let text = joinedText(itemLines)
+            if let orderedMarker = marker.orderedMarker {
+                orderedItems.append(CodexChatMarkdownOrderedItem(marker: orderedMarker, text: text))
+            } else {
+                items.append(text)
+            }
         }
 
         switch kind {
         case .unordered:
             return .unorderedList(items)
         case .ordered:
-            return .orderedList(items)
+            return .orderedList(orderedItems)
         }
     }
 
@@ -166,7 +175,11 @@ enum CodexChatMarkdownParser {
         if let first = trimmed.first,
            ["-", "*", "+"].contains(first),
            trimmed.dropFirst().first == " " {
-            return ListMarker(kind: .unordered, content: String(trimmed.dropFirst(2)))
+            return ListMarker(
+                kind: .unordered,
+                orderedMarker: nil,
+                content: String(trimmed.dropFirst(2))
+            )
         }
 
         let number = trimmed.prefix(while: { $0.isNumber })
@@ -176,7 +189,11 @@ enum CodexChatMarkdownParser {
               punctuation == "." || punctuation == ")",
               suffix.dropFirst().first == " "
         else { return nil }
-        return ListMarker(kind: .ordered, content: String(suffix.dropFirst(2)))
+        return ListMarker(
+            kind: .ordered,
+            orderedMarker: String(number) + String(punctuation),
+            content: String(suffix.dropFirst(2))
+        )
     }
 
     private static func nextNonemptyLine(in lines: [String], after index: Int) -> Int? {

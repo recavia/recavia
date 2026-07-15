@@ -19,14 +19,22 @@ struct CodexChatMessageRow: View {
             } else {
                 VStack(alignment: .leading, spacing: 10) {
                     if !message.reasoning.isEmpty {
-                        CodexChatReasoningView(reasoning: message.reasoning)
+                        CodexChatReasoningView(
+                            reasoning: message.reasoning,
+                            isStreaming: message.isStreaming
+                        )
                     }
 
                     if message.text.isEmpty, message.isStreaming {
                         ProgressView()
                             .controlSize(.small)
                     } else if !message.text.isEmpty {
-                        CodexChatMarkdownView(markdown: message.text)
+                        if message.isStreaming {
+                            Text(message.text)
+                                .textSelection(.enabled)
+                        } else {
+                            CodexChatMarkdownView(markdown: message.text)
+                        }
                     }
 
                     if !message.text.isEmpty, !message.isStreaming {

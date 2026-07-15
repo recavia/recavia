@@ -49,23 +49,7 @@ import Foundation
             #expect(threadParams["sandbox"] == .string("read-only"))
             #expect(threadParams["cwd"] == .string(workspace.appending(path: vaultID.uuidString.lowercased()).path))
             let config = try #require(threadParams["config"]?.objectValue)
-            #expect(config["features.apps"] == .bool(false))
-            #expect(config["features.codex_hooks"] == .bool(false))
-            #expect(config["features.memory_tool"] == .bool(false))
-            #expect(config["features.plugins"] == .bool(false))
-            #expect(config["include_apps_instructions"] == .bool(false))
-            #expect(config["memories.dedicated_tools"] == .bool(false))
-            #expect(config["memories.use_memories"] == .bool(false))
-            #expect(config["orchestrator.mcp.enabled"] == .bool(false))
-            #expect(config["skills.include_instructions"] == .bool(false))
-            #expect(config["mcp_servers"] == .object([
-                "dahlia": .object([
-                    "args": .array([.string("--vault-id"), .string(vaultID.uuidString)]),
-                    "command": .string("/tmp/dahlia-mcp"),
-                    "enabled": .bool(true),
-                ]),
-                "docs": .object(["enabled": .bool(false)]),
-            ]))
+            expectChatConfiguration(config, vaultID: vaultID)
             #expect(threadParams["developerInstructions"]?.stringValue?.contains("query_meetings") == true)
 
             let turnParams = try #require(messages.first {
@@ -137,8 +121,9 @@ import Foundation
 
             #expect(page.threads.map(\.id) == ["thread-history"])
             #expect(page.nextCursor == "next-page")
-            #expect(loaded.messages.map(\.text) == ["Question", "Answer"])
-            #expect(loaded.messages.last?.reasoning == "Reviewed the question\n\nPrepared the answer")
+            #expect(loaded.messages.map(\.text) == ["Question", "Answer", ""])
+            #expect(loaded.messages[1].reasoning == "Reviewed the question\n\nPrepared the answer")
+            #expect(loaded.messages[2].reasoning == "Reasoning without an answer")
             #expect(resumed.model == "default-model")
             #expect(resumed.reasoningEffort == "high")
 
@@ -177,6 +162,26 @@ import Foundation
             }
             await appServer.shutdown()
             return events
+        }
+
+        private func expectChatConfiguration(_ config: [String: JSONValue], vaultID: UUID) {
+            #expect(config["features.apps"] == .bool(false))
+            #expect(config["features.codex_hooks"] == .bool(false))
+            #expect(config["features.memory_tool"] == .bool(false))
+            #expect(config["features.plugins"] == .bool(false))
+            #expect(config["include_apps_instructions"] == .bool(false))
+            #expect(config["memories.dedicated_tools"] == .bool(false))
+            #expect(config["memories.use_memories"] == .bool(false))
+            #expect(config["orchestrator.mcp.enabled"] == .bool(false))
+            #expect(config["skills.include_instructions"] == .bool(false))
+            #expect(config["mcp_servers"] == .object([
+                "dahlia": .object([
+                    "args": .array([.string("--vault-id"), .string(vaultID.uuidString)]),
+                    "command": .string("/tmp/dahlia-mcp"),
+                    "enabled": .bool(true),
+                ]),
+                "docs": .object(["enabled": .bool(false)]),
+            ]))
         }
     }
 

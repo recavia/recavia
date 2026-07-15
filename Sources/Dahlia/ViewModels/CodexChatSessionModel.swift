@@ -179,7 +179,7 @@ final class CodexChatSessionModel: Identifiable {
                 }
             }
             if turnCompleted {
-                await reconcileFromRollout()
+                await reconcileFromRollout(preservingReasoningFrom: responseID)
             }
         } catch is CancellationError {
             completeTurnResponse(responseID: responseID)
@@ -251,11 +251,28 @@ final class CodexChatSessionModel: Identifiable {
         messages[index].reasoning = accumulator.reasoningText
     }
 
-    private func reconcileFromRollout() async {
+    private func reconcileFromRollout(preservingReasoningFrom responseID: String) async {
         guard let backendThreadID,
               let thread = try? await service.loadThread(id: backendThreadID)
         else { return }
-        apply(thread, preservingPendingMessages: thread.messages.count < messages.count)
+        let streamedReasoning = messages
+            .first(where: { $0.id == responseID })?
+            .reasoning
+            .nilIfBlank
+        var reconciledMessages = thread.messages
+        if let streamedReasoning,
+           let index = reconciledMessages.lastIndex(where: { $0.role == .assistant }),
+           reconciledMessages[index].reasoning.nilIfBlank == nil {
+            reconciledMessages[index].reasoning = streamedReasoning
+        }
+        let reconciledThread = CodexChatThread(
+            id: thread.id,
+            title: thread.title,
+            messages: reconciledMessages,
+            model: thread.model,
+            reasoningEffort: thread.reasoningEffort
+        )
+        apply(reconciledThread, preservingPendingMessages: thread.messages.count < messages.count)
     }
 
     private func finishGeneration() {
