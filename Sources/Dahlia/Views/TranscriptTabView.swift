@@ -10,12 +10,12 @@ struct TranscriptTabView: View {
     private struct EdgeProximity: Equatable {
         let isNearBottom: Bool
         let isNearTop: Bool
+        let contentOffsetY: CGFloat
     }
 
-    private enum WindowMetrics {
-        /// SwiftUI の差分計算量を抑え、録音中の MainActor 占有時間に上限を設ける。
-        static let initialWindowSize = 100
-        static let loadMoreCount = 50
+    private struct SegmentStructure: Equatable {
+        let count: Int
+        let latestConfirmedID: TranscriptSegment.ID?
     }
 
     @ObservedObject var store: TranscriptStore
@@ -27,30 +27,40 @@ struct TranscriptTabView: View {
     let retryBatchTranscription: () -> Void
     let discardFailedBatchTranscription: () -> Void
 
-    @State private var shouldFollowLatest = true
-    @State private var windowSize = WindowMetrics.initialWindowSize
+    /// 過去へ移動しても ForEach の要素数が増えない固定容量の表示 window。
+    @State private var segmentWindow = TranscriptSegmentWindow<TranscriptSegment.ID>()
     @State private var didCompleteInitialBottomScroll = false
     /// 上端到達時の onAppear が連射しないようにする単発フラグ。
     /// 一度 false に倒したら、ユーザーが上端から離れた瞬間 (`!isNearTop`) にのみ再アームする。
     /// Spinner が表示領域に留まり続けるケースで誤って再ロードが走るのを防ぐ。
     @State private var canLoadMoreFromTop = true
+    @State private var canLoadMoreFromBottom = true
+    @State private var isWindowShiftPending = false
     /// resetWindowAndScrollToBottom 中の deferred scroll を保持し、リセット連発時に古い Task を cancel する。
     @State private var pendingScrollTask: Task<Void, Never>?
 
-    /// ForEach の ID 照合対象を制限するため、末尾 windowSize 件のみ返す。
+    /// ForEach の ID 照合対象を固定容量に制限する。
     private var windowedSegments: ArraySlice<TranscriptSegment> {
-        let segments = store.segments
-        guard segments.count > windowSize else { return segments[...] }
-        return segments.suffix(windowSize)
+        store.segments[windowRange]
     }
 
-    /// 配列確保なしでウィンドウ内のセグメント数を返す。
-    private var windowedSegmentCount: Int {
-        min(store.segments.count, windowSize)
+    private var windowRange: Range<Int> {
+        segmentWindow.range(in: store.segments, id: \.id)
     }
 
     private var hasMoreAbove: Bool {
-        store.segments.count > windowSize
+        windowRange.lowerBound > 0
+    }
+
+    private var hasMoreBelow: Bool {
+        windowRange.upperBound < store.segments.count
+    }
+
+    private var segmentStructure: SegmentStructure {
+        let latestConfirmedID = store.segments
+            .lastIndex(where: \.isConfirmed)
+            .map { store.segments[$0].id }
+        return SegmentStructure(count: store.segments.count, latestConfirmedID: latestConfirmedID)
     }
 
     var body: some View {
@@ -86,7 +96,7 @@ struct TranscriptTabView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                             .onAppear {
-                                loadMoreSegmentsIfNeeded()
+                                loadEarlierSegmentsIfNeeded(using: proxy)
                             }
                     }
 
@@ -105,6 +115,15 @@ struct TranscriptTabView: View {
                             allowsTextSelection: !isListening
                         )
                         .equatable()
+                    }
+
+                    if hasMoreBelow {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .onAppear {
+                                loadLaterSegmentsIfNeeded(using: proxy)
+                            }
                     }
 
                     if showsRecordingIndicator {
@@ -138,46 +157,93 @@ struct TranscriptTabView: View {
                     - geometry.containerSize.height
                 return EdgeProximity(
                     isNearBottom: distanceFromBottom <= ScrollMetrics.followThreshold,
-                    isNearTop: geometry.contentOffset.y <= ScrollMetrics.loadMoreThreshold
+                    isNearTop: geometry.contentOffset.y <= ScrollMetrics.loadMoreThreshold,
+                    contentOffsetY: geometry.contentOffset.y
                 )
-            } action: { _, proximity in
-                shouldFollowLatest = proximity.isNearBottom
+            } action: { previousProximity, proximity in
+                let isFollowingLatest = proximity.isNearBottom && !hasMoreBelow
+                if isFollowingLatest {
+                    segmentWindow.followLatest()
+                } else if didCompleteInitialBottomScroll,
+                          segmentWindow.isFollowingLatest,
+                          abs(proximity.contentOffsetY - previousProximity.contentOffsetY) > 0.5 {
+                    // Content growth alone must not disable follow mode; only viewport movement does.
+                    segmentWindow.freeze(in: store.segments, id: \.id)
+                }
                 if !proximity.isNearTop {
                     canLoadMoreFromTop = true
                 }
-            }
-            .onChange(of: windowedSegmentCount) { oldCount, newCount in
-                guard newCount > oldCount, shouldFollowLatest else { return }
-                scrollToBottom(using: proxy)
-            }
-            .onChange(of: shouldFollowLatest) { _, isFollowing in
-                if isFollowing {
-                    windowSize = WindowMetrics.initialWindowSize
+                if !proximity.isNearBottom {
+                    canLoadMoreFromBottom = true
                 }
+            }
+            .onChange(of: segmentStructure) { _, _ in
+                guard segmentWindow.isFollowingLatest else { return }
+                scrollToBottom(using: proxy)
             }
         }
     }
 
-    private func loadMoreSegmentsIfNeeded() {
-        guard didCompleteInitialBottomScroll, !shouldFollowLatest, canLoadMoreFromTop else { return }
+    private func loadEarlierSegmentsIfNeeded(using proxy: ScrollViewProxy) {
+        guard didCompleteInitialBottomScroll,
+              !segmentWindow.isFollowingLatest,
+              canLoadMoreFromTop,
+              !isWindowShiftPending else { return }
+        let currentRange = windowRange
+        guard !currentRange.isEmpty else { return }
+        let anchorID = store.segments[currentRange.lowerBound].id
+
         canLoadMoreFromTop = false
-        windowSize = min(windowSize + WindowMetrics.loadMoreCount, store.segments.count)
+        guard segmentWindow.shiftEarlier(in: store.segments, id: \.id) else { return }
+        restoreScrollPosition(to: anchorID, anchor: .top, using: proxy)
+    }
+
+    private func loadLaterSegmentsIfNeeded(using proxy: ScrollViewProxy) {
+        guard didCompleteInitialBottomScroll,
+              !segmentWindow.isFollowingLatest,
+              canLoadMoreFromBottom,
+              !isWindowShiftPending else { return }
+        let currentRange = windowRange
+        guard !currentRange.isEmpty else { return }
+        let anchorID = store.segments[currentRange.upperBound - 1].id
+
+        canLoadMoreFromBottom = false
+        guard segmentWindow.shiftLater(in: store.segments, id: \.id) else { return }
+        restoreScrollPosition(to: anchorID, anchor: .bottom, using: proxy)
     }
 
     private func resetWindowAndScrollToBottom(using proxy: ScrollViewProxy) {
         didCompleteInitialBottomScroll = false
         canLoadMoreFromTop = true
-        shouldFollowLatest = true
-        windowSize = WindowMetrics.initialWindowSize
+        canLoadMoreFromBottom = true
+        isWindowShiftPending = false
+        segmentWindow.followLatest()
 
-        // 連続リセット時に古い Task が新しい状態を上書きしないよう、pending Task を cancel する。
-        pendingScrollTask?.cancel()
-        pendingScrollTask = Task { @MainActor in
+        scheduleDeferredScroll {
             // LazyVStack の初期レイアウト確定後にスクロールするため、1 ターン譲る。
-            await Task.yield()
-            guard !Task.isCancelled else { return }
             scrollToBottom(using: proxy)
             didCompleteInitialBottomScroll = true
+        }
+    }
+
+    private func restoreScrollPosition(
+        to id: TranscriptSegment.ID,
+        anchor: UnitPoint,
+        using proxy: ScrollViewProxy
+    ) {
+        isWindowShiftPending = true
+        scheduleDeferredScroll {
+            proxy.scrollTo(id, anchor: anchor)
+            isWindowShiftPending = false
+        }
+    }
+
+    private func scheduleDeferredScroll(_ action: @escaping @MainActor () -> Void) {
+        pendingScrollTask?.cancel()
+        pendingScrollTask = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            action()
         }
     }
 
