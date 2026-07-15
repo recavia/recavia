@@ -202,6 +202,81 @@ import GRDB
             #expect(meeting.description == "First description")
         }
 
+        @Test
+        func deletingScreenshotsAlsoRemovesPersistedSummaryImageReferences() async throws {
+            let context = try makeRepositoryContext()
+            let deletedScreenshot = MeetingScreenshotRecord(
+                id: .v7(),
+                meetingId: context.meeting.id,
+                capturedAt: .now,
+                imageData: Data([0x89, 0x50, 0x4E, 0x47]),
+                mimeType: "image/png"
+            )
+            try await context.manager.dbQueue.write { db in
+                try deletedScreenshot.insert(db)
+            }
+            let caption = SummaryText("Launch screen", transcriptRef: TranscriptReference(time: "00:00:42"))
+            let document = SummaryDocument(
+                title: "Summary",
+                sections: [
+                    SummarySection(
+                        id: .v7(),
+                        heading: "Launch",
+                        blocks: [.image(screenshotId: deletedScreenshot.id, caption: caption)]
+                    ),
+                ]
+            )
+            try context.repo.applyGeneratedSummary(
+                toMeetingId: context.meeting.id,
+                document: document,
+                renderedBody: "Launch screen",
+                tags: []
+            )
+
+            let updatedDocument = try await context.repo.deleteScreenshots(
+                ids: [deletedScreenshot.id],
+                meetingId: context.meeting.id
+            )
+
+            #expect(try context.repo.fetchScreenshots(forMeetingId: context.meeting.id).isEmpty)
+            #expect(updatedDocument?.sections[0].blocks == [.paragraph(caption)])
+            #expect(try context.repo.fetchSummary(forMeetingId: context.meeting.id)?.loadDocument() == updatedDocument)
+        }
+
+        @Test
+        func deletingUnreferencedScreenshotDoesNotConvertLegacySummaryDocument() async throws {
+            let context = try makeRepositoryContext()
+            let screenshot = MeetingScreenshotRecord(
+                id: .v7(),
+                meetingId: context.meeting.id,
+                capturedAt: .now,
+                imageData: Data([0x89, 0x50, 0x4E, 0x47]),
+                mimeType: "image/png"
+            )
+            try await context.manager.dbQueue.write { db in
+                try screenshot.insert(db)
+            }
+            try context.repo.upsertSummary(
+                SummaryRecord(
+                    meetingId: context.meeting.id,
+                    title: "Legacy",
+                    summary: "## Notes\n\nNo screenshot reference",
+                    document: nil,
+                    vaultRelativePath: nil,
+                    googleFileId: nil,
+                    createdAt: .now
+                )
+            )
+
+            let updatedDocument = try await context.repo.deleteScreenshots(
+                ids: [screenshot.id],
+                meetingId: context.meeting.id
+            )
+
+            #expect(updatedDocument == nil)
+            #expect(try context.repo.fetchSummary(forMeetingId: context.meeting.id)?.document == nil)
+        }
+
         private func makeRepositoryContext() throws -> RepositoryContext {
             let manager = try AppDatabaseManager(path: ":memory:")
             let repo = MeetingRepository(dbQueue: manager.dbQueue)

@@ -48,6 +48,25 @@ struct SummaryDocument: Codable, Equatable {
         encoder.outputFormatting = [.sortedKeys]
         return try String(decoding: encoder.encode(self), as: UTF8.self)
     }
+
+    func removingScreenshotReferences(_ screenshotIds: Set<UUID>) -> SummaryDocument {
+        guard !screenshotIds.isEmpty else { return self }
+
+        var updated = self
+        updated.sections = sections.map { section in
+            var updatedSection = section
+            updatedSection.blocks = section.blocks.compactMap { block in
+                guard case let .image(screenshotId, caption) = block.content,
+                      screenshotIds.contains(screenshotId) else {
+                    return block
+                }
+                guard caption.text.nilIfBlank != nil || caption.transcriptRef != nil else { return nil }
+                return SummaryBlock(id: block.id, content: .paragraph(caption))
+            }
+            return updatedSection
+        }
+        return updated
+    }
 }
 
 struct SummarySection: Codable, Equatable, Identifiable {

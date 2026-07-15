@@ -38,8 +38,6 @@ enum ScreenshotExportService {
     }
 
     private static func fileExtension(for screenshot: MeetingScreenshotRecord) -> String {
-        ImageEncoder.fileExtension(for: screenshot.mimeType)
-            ?? ImageEncoder.fileExtension(for: ImageEncoder.mimeType(for: screenshot.imageData) ?? "")
-            ?? ImageEncoder.preferredFileExtension
+        ImageEncoder.fileExtension(mimeType: screenshot.mimeType, data: screenshot.imageData)
     }
 }

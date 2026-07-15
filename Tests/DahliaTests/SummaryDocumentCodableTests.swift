@@ -105,6 +105,33 @@ import Foundation
         }
 
         @Test
+        func removingScreenshotReferencesPreservesCaptionsAsParagraphs() {
+            let removedImageId = UUID.v7()
+            let retainedImageId = UUID.v7()
+            let caption = SummaryText("Architecture diagram", transcriptRef: TranscriptReference(time: "00:01:23"))
+            let document = SummaryDocument(
+                title: "Summary",
+                sections: [
+                    SummarySection(
+                        id: .v7(),
+                        heading: "Design",
+                        blocks: [
+                            .image(screenshotId: removedImageId, caption: caption),
+                            .image(screenshotId: retainedImageId, caption: "Keep"),
+                            .image(screenshotId: UUID.v7(), caption: ""),
+                        ]
+                    ),
+                ]
+            )
+
+            let updated = document.removingScreenshotReferences([removedImageId])
+
+            #expect(updated.sections[0].blocks[0] == .paragraph(caption))
+            #expect(updated.sections[0].blocks[1] == .image(screenshotId: retainedImageId, caption: "Keep"))
+            #expect(updated.sections[0].blocks.count == 3)
+        }
+
+        @Test
         func decodesPersistedSummaryDocumentShape() throws {
             let imageId = UUID.v7()
             let json = """

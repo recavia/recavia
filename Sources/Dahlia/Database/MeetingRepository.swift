@@ -464,9 +464,29 @@ final class MeetingRepository {
         }
     }
 
-    func deleteScreenshot(id: UUID) async throws {
-        try await dbQueue.write { db in
-            _ = try MeetingScreenshotRecord.deleteOne(db, key: id)
+    func deleteScreenshots(ids: Set<UUID>, meetingId: UUID) async throws -> SummaryDocument? {
+        guard !ids.isEmpty else { return nil }
+        return try await dbQueue.write { db in
+            let deletedIds = try Set(MeetingScreenshotRecord
+                .select(Column("id"))
+                .filter(ids.contains(Column("id")))
+                .filter(Column("meetingId") == meetingId)
+                .asRequest(of: UUID.self)
+                .fetchAll(db)
+            )
+            guard !deletedIds.isEmpty else { return nil }
+
+            _ = try MeetingScreenshotRecord
+                .filter(deletedIds.contains(Column("id")))
+                .deleteAll(db)
+
+            guard var summary = try SummaryRecord.fetchOne(db, key: meetingId) else { return nil }
+            let existingDocument = summary.loadDocument()
+            let updatedDocument = existingDocument.removingScreenshotReferences(deletedIds)
+            guard updatedDocument != existingDocument else { return nil }
+            summary.document = try updatedDocument.databaseJSONString()
+            try summary.update(db)
+            return updatedDocument
         }
     }
 
