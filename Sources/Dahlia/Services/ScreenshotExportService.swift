@@ -37,9 +37,19 @@ enum ScreenshotExportService {
         return relativePaths
     }
 
+    static func deleteExportedScreenshots(
+        vaultURL: URL,
+        screenshots: [MeetingScreenshotRecord]
+    ) throws {
+        let directoryURL = screenshotsDirectoryURL(in: vaultURL)
+        for screenshot in screenshots {
+            let fileURL = directoryURL.appending(path: filename(for: screenshot))
+            guard FileManager.default.fileExists(atPath: fileURL.path) else { continue }
+            try FileManager.default.removeItem(at: fileURL)
+        }
+    }
+
     private static func fileExtension(for screenshot: MeetingScreenshotRecord) -> String {
-        ImageEncoder.fileExtension(for: screenshot.mimeType)
-            ?? ImageEncoder.fileExtension(for: ImageEncoder.mimeType(for: screenshot.imageData) ?? "")
-            ?? ImageEncoder.preferredFileExtension
+        ImageEncoder.fileExtension(mimeType: screenshot.mimeType, data: screenshot.imageData)
     }
 }

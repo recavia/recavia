@@ -57,6 +57,12 @@ enum ImageEncoder {
         }
     }
 
+    static func fileExtension(mimeType: String, data: Data) -> String {
+        fileExtension(for: mimeType)
+            ?? fileExtension(for: self.mimeType(for: data) ?? "")
+            ?? preferredFileExtension
+    }
+
     /// CGImage をエンコードする。WebP 優先、非対応時は JPEG フォールバック。
     static func encode(_ cgImage: CGImage, quality: CGFloat) -> Data? {
         let outputType = supportsWebP ? UTType.webP.identifier : UTType.jpeg.identifier

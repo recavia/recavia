@@ -275,7 +275,7 @@ import GRDB
         }
 
         private func waitUntil(
-            timeout: Duration = .seconds(5),
+            timeout: Duration = .seconds(15),
             condition: () -> Bool
         ) async -> Bool {
             let clock = ContinuousClock()

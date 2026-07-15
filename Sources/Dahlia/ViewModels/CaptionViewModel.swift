@@ -7,6 +7,7 @@ import os
 @preconcurrency import ScreenCaptureKit
 import Speech
 import SwiftUI
+import UniformTypeIdentifiers
 
 private let captionViewModelLogger = Logger(subsystem: "com.dahlia", category: "CaptionViewModel")
 
@@ -162,6 +163,7 @@ final class CaptionViewModel: ObservableObject {
     // MARK: - Screenshot State
 
     @Published var screenshots: [MeetingScreenshotRecord] = []
+    @Published private(set) var isDeletingScreenshots = false
     /// キャプチャ対象として選択可能なウィンドウ一覧。
     @Published var availableWindows: [ScreenshotWindowOption] = []
     /// スクリーンショット取得対象。未設定の場合はキャプチャしない。
@@ -1945,6 +1947,7 @@ final class CaptionViewModel: ObservableObject {
         guard !isListening,
               !isFinalizingRecording,
               !isSummaryGenerating,
+              !isDeletingScreenshots,
               currentMeetingId != nil,
               currentVaultURL != nil,
               batchTranscriptionState?.blocksSummaryGeneration != true else { return false }
@@ -2009,7 +2012,8 @@ final class CaptionViewModel: ObservableObject {
         recordingSessions: [RecordingSessionTimeline],
         exportOptions: SummaryExportOptions
     ) async {
-        guard !transcriptText.isEmpty else { return }
+        guard !transcriptText.isEmpty,
+              !isDeletingScreenshots else { return }
 
         // 要約前にノートを即座に保存してから取得
         saveNoteImmediately()
@@ -2589,16 +2593,73 @@ final class CaptionViewModel: ObservableObject {
     }
 
     func deleteScreenshot(_ screenshot: MeetingScreenshotRecord) {
-        guard let dbQueue = activeDbQueueForSessionControls else { return }
+        deleteScreenshots(ids: [screenshot.id], meetingId: screenshot.meetingId)
+    }
+
+    func deleteScreenshots(ids: Set<UUID>) {
+        guard let meetingId = currentMeetingId else { return }
+        deleteScreenshots(ids: ids, meetingId: meetingId)
+    }
+
+    private func deleteScreenshots(ids: Set<UUID>, meetingId: UUID) {
+        guard !ids.isEmpty,
+              !isSummaryGenerating,
+              !isDeletingScreenshots,
+              let dbQueue = activeDbQueueForSessionControls,
+              let vaultURL = currentVaultURL else { return }
+        let screenshotIds = ids
+        isDeletingScreenshots = true
         Task { [weak self] in
+            defer { self?.isDeletingScreenshots = false }
             do {
-                try await MeetingRepository(dbQueue: dbQueue).deleteScreenshot(id: screenshot.id)
-                await ScreenshotImageLoader.shared.remove(screenshotID: screenshot.id)
-                guard let self, self.currentMeetingId == screenshot.meetingId else { return }
-                self.screenshots.removeAll { $0.id == screenshot.id }
+                guard let result = try await MeetingRepository(dbQueue: dbQueue).deleteScreenshots(
+                    ids: screenshotIds,
+                    meetingId: meetingId
+                ) else { return }
+                for screenshot in result.deletedScreenshots {
+                    await ScreenshotImageLoader.shared.remove(screenshotID: screenshot.id)
+                }
+                do {
+                    try await Task.detached(priority: .utility) {
+                        try VaultSummaryExportService.synchronizeScreenshotDeletion(
+                            vaultURL: vaultURL,
+                            storedSummaryRelativePath: result.storedSummaryRelativePath,
+                            updatedSummaryMarkdown: result.updatedSummaryMarkdown,
+                            deletedScreenshots: result.deletedScreenshots
+                        )
+                    }.value
+                } catch {
+                    captionViewModelLogger.error("Failed to synchronize deleted screenshots with the Vault: \(error)")
+                    ErrorReportingService.capture(error, context: ["source": "synchronizeScreenshotDeletion"])
+                }
+                guard let self, self.currentMeetingId == meetingId else { return }
+                let deletedIds = Set(result.deletedScreenshots.map(\.id))
+                self.screenshots.removeAll { deletedIds.contains($0.id) }
+                if let document = result.updatedDocument {
+                    self.currentSummaryDocument = document
+                }
             } catch {
-                captionViewModelLogger.error("Failed to delete screenshot \(screenshot.id): \(error)")
-                ErrorReportingService.capture(error, context: ["source": "deleteScreenshot"])
+                captionViewModelLogger.error("Failed to delete screenshots: \(error)")
+                ErrorReportingService.capture(error, context: ["source": "deleteScreenshots"])
+            }
+        }
+    }
+
+    func downloadScreenshot(_ screenshot: MeetingScreenshotRecord) {
+        let fileExtension = ImageEncoder.fileExtension(mimeType: screenshot.mimeType, data: screenshot.imageData)
+        let panel = NSSavePanel()
+        if let contentType = UTType(filenameExtension: fileExtension) {
+            panel.allowedContentTypes = [contentType]
+        }
+        panel.nameFieldStringValue = "screenshot_\(Self.fileDateFormatter.string(from: screenshot.capturedAt)).\(fileExtension)"
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try screenshot.imageData.write(to: url, options: .atomic)
+            } catch {
+                captionViewModelLogger.error("Failed to download screenshot: \(error)")
+                ErrorReportingService.capture(error, context: ["source": "downloadScreenshot"])
+                self?.errorMessage = L10n.screenshotDownloadFailed(error.localizedDescription)
             }
         }
     }

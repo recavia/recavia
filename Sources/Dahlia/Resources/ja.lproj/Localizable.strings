@@ -6,6 +6,14 @@
 "Apply" = "適用";
 "Clear" = "クリア";
 "Close" = "閉じる";
+"Done" = "完了";
+"Select" = "選択";
+"Select All" = "すべて選択";
+"Download" = "ダウンロード";
+"Layout" = "レイアウト";
+"Large" = "大";
+"Small" = "小";
+"The selected screenshots will be permanently deleted. Referenced captions will remain in the summary." = "選択したスクリーンショットは完全に削除されます。要約で参照されている画像の説明文は要約に残ります。";
 "Search" = "検索";
 "Actions" = "操作";
 "Status" = "状態";
@@ -178,6 +186,7 @@
 "Take Screenshot" = "スクリーンショットを撮影";
 "Display not found" = "ディスプレイが見つかりません";
 "Screenshot image was unavailable" = "スクリーンショット画像を取得できませんでした";
+"Screenshot download failed: %@" = "スクリーンショットのダウンロードに失敗しました: %@";
 "Screenshot encoding failed" = "スクリーンショットのエンコードに失敗しました";
 "Screenshot source is not selected or is unavailable" = "スクリーンショット対象が未設定、または利用できません";
 "Screenshot capture failed: %@" = "スクリーンショットの取得に失敗しました: %@";

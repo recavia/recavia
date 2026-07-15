@@ -6,6 +6,14 @@
 "Apply" = "Apply";
 "Clear" = "Clear";
 "Close" = "Close";
+"Done" = "Done";
+"Select" = "Select";
+"Select All" = "Select All";
+"Download" = "Download";
+"Layout" = "Layout";
+"Large" = "Large";
+"Small" = "Small";
+"The selected screenshots will be permanently deleted. Referenced captions will remain in the summary." = "The selected screenshots will be permanently deleted. Referenced captions will remain in the summary.";
 "Search" = "Search";
 "Actions" = "Actions";
 "Status" = "Status";
@@ -178,6 +186,7 @@
 "Take Screenshot" = "Take Screenshot";
 "Display not found" = "Display not found";
 "Screenshot image was unavailable" = "Screenshot image was unavailable";
+"Screenshot download failed: %@" = "Screenshot download failed: %@";
 "Screenshot encoding failed" = "Screenshot encoding failed";
 "Screenshot source is not selected or is unavailable" = "Screenshot source is not selected or is unavailable";
 "Screenshot capture failed: %@" = "Screenshot capture failed: %@";

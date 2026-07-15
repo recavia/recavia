@@ -35,6 +35,18 @@ enum L10n {
     static var apply: String { String(localized: "Apply", bundle: bundle) }
     static var clear: String { String(localized: "Clear", bundle: bundle) }
     static var close: String { String(localized: "Close", bundle: bundle) }
+    static var done: String { String(localized: "Done", bundle: bundle) }
+    static var select: String { String(localized: "Select", bundle: bundle) }
+    static var selectAll: String { String(localized: "Select All", bundle: bundle) }
+    static var download: String { String(localized: "Download", bundle: bundle) }
+    static var layout: String { String(localized: "Layout", bundle: bundle) }
+    static var large: String { String(localized: "Large", bundle: bundle) }
+    static var medium: String { String(localized: "Medium", bundle: bundle) }
+    static var small: String { String(localized: "Small", bundle: bundle) }
+    static var deleteSelectedScreenshotsConfirmation: String { String(
+        localized: "The selected screenshots will be permanently deleted. Referenced captions will remain in the summary.",
+        bundle: bundle
+    ) }
     static var search: String { String(localized: "Search", bundle: bundle) }
     static var actions: String { String(localized: "Actions", bundle: bundle) }
     static var status: String { String(localized: "Status", bundle: bundle) }
@@ -344,6 +356,7 @@ enum L10n {
     static var screenshotEncodingFailed: String { String(localized: "Screenshot encoding failed", bundle: bundle) }
     static var screenshotSourceUnavailable: String { String(localized: "Screenshot source is not selected or is unavailable", bundle: bundle) }
     static func screenshotCaptureFailed(_ reason: String) -> String { String(localized: "Screenshot capture failed: \(reason)", bundle: bundle) }
+    static func screenshotDownloadFailed(_ reason: String) -> String { String(localized: "Screenshot download failed: \(reason)", bundle: bundle) }
     static var automaticScreenshots: String { String(localized: "Automatic Screenshots", bundle: bundle) }
     static var automaticScreenshotsDescription: String { String(
         localized: "Capture the screen during recording and save a new image when the display changes significantly.",

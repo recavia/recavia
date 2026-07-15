@@ -116,7 +116,11 @@ private struct ScreenshotOverlayView: View {
 
             Button(L10n.close, systemImage: "xmark.circle.fill", action: onDismiss)
                 .labelStyle(.iconOnly)
-                .font(.title3)
+                .font(.title2)
+                .foregroundStyle(.black)
+                .padding(8)
+                .background(.white, in: Circle())
+                .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
                 .padding(16)
                 .buttonStyle(.plain)
                 .pointerStyle(.link)
@@ -136,44 +140,69 @@ private struct ScreenshotThumbnailView: View {
     let screenshot: MeetingScreenshotRecord
     let timestamp: String
     let viewModel: CaptionViewModel
+    let isSelecting: Bool
     @Binding var expandedScreenshot: MeetingScreenshotRecord?
+    @Binding var selectedScreenshotIds: Set<UUID>
     @StateObject private var imageLoader = ScreenshotImageLoadModel()
+
+    private var isSelected: Bool {
+        selectedScreenshotIds.contains(screenshot.id)
+    }
 
     var body: some View {
         VStack(spacing: 4) {
-            if case let .loaded(thumbnailImage) = imageLoader.state {
-                Button {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        expandedScreenshot = screenshot
+            Button(action: handleImageAction) {
+                Group {
+                    if case let .loaded(thumbnailImage) = imageLoader.state {
+                        Image(decorative: thumbnailImage, scale: 1)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                    } else {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.primary.opacity(0.05))
+                            .aspectRatio(16 / 9, contentMode: .fit)
                     }
-                } label: {
-                    Image(decorative: thumbnailImage, scale: 1)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
                 }
-                .buttonStyle(.plain)
-                .pointerStyle(.link)
-                .accessibilityLabel(L10n.open)
-            } else {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.primary.opacity(0.05))
-                    .aspectRatio(16 / 9, contentMode: .fit)
-                    .accessibilityHidden(true)
+                .overlay(alignment: .topTrailing) {
+                    if isSelecting {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.title2)
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(isSelected ? Color.accentColor : .white, .black.opacity(0.45))
+                            .padding(8)
+                    }
+                }
             }
+            .buttonStyle(.plain)
+            .pointerStyle(.link)
+            .accessibilityLabel(isSelecting ? L10n.select : L10n.open)
+            .accessibilityValue(isSelected ? L10n.selected : "")
             HStack {
                 Text(timestamp)
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button(L10n.delete, systemImage: "trash", role: .destructive) {
-                    viewModel.deleteScreenshot(screenshot)
+                if !isSelecting {
+                    Button(L10n.download, systemImage: "arrow.down.circle") {
+                        viewModel.downloadScreenshot(screenshot)
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.plain)
+                    .pointerStyle(.link)
+                    .foregroundStyle(.secondary)
+                    .help(L10n.download)
+
+                    Button(L10n.delete, systemImage: "trash", role: .destructive) {
+                        viewModel.deleteScreenshot(screenshot)
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.plain)
+                    .pointerStyle(.link)
+                    .foregroundStyle(.secondary)
+                    .disabled(viewModel.isSummaryGenerating || viewModel.isDeletingScreenshots)
                 }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.plain)
-                .pointerStyle(.link)
-                .foregroundStyle(.secondary)
             }
         }
         .padding(6)
@@ -184,6 +213,20 @@ private struct ScreenshotThumbnailView: View {
                 data: screenshot.imageData,
                 targetSize: .maxPixelSize(600)
             )
+        }
+    }
+
+    private func handleImageAction() {
+        if isSelecting {
+            if isSelected {
+                selectedScreenshotIds.remove(screenshot.id)
+            } else {
+                selectedScreenshotIds.insert(screenshot.id)
+            }
+        } else {
+            withAnimation(.easeOut(duration: 0.15)) {
+                expandedScreenshot = screenshot
+            }
         }
     }
 }
@@ -400,6 +443,10 @@ struct ControlPanelView: View {
     @ObservedObject private var appSettings = AppSettings.shared
     @State private var selectedTab: DetailTab = .notes
     @State private var expandedScreenshot: MeetingScreenshotRecord?
+    @State private var screenshotGridLayout = ScreenshotGridLayout.large
+    @State private var isSelectingScreenshots = false
+    @State private var selectedScreenshotIds: Set<UUID> = []
+    @State private var isConfirmingScreenshotDeletion = false
     @State private var isEditingMeetingName = false
     @State private var editingMeetingName = ""
     @State private var didTapInsideMeetingNameEditor = false
@@ -509,12 +556,29 @@ struct ControlPanelView: View {
         .onChange(of: viewModel.requestShowSummaryTab) {
             updateSummaryTabSelection()
         }
+        .onChange(of: isSelectingScreenshots) { _, isSelecting in
+            if !isSelecting {
+                selectedScreenshotIds.removeAll()
+            }
+        }
         .onChange(of: displayedMeetingIdentity) { _, newIdentity in
             if newIdentity != nil {
                 selectedTab = initialTabSelection
             }
             viewModel.requestShowSummaryTab = false
             cancelMeetingRename()
+            isSelectingScreenshots = false
+            selectedScreenshotIds.removeAll()
+        }
+        .confirmationDialog(
+            L10n.deleteCount(selectedScreenshotIds.count),
+            isPresented: $isConfirmingScreenshotDeletion,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.delete, role: .destructive, action: confirmDeleteSelectedScreenshots)
+            Button(L10n.cancel, role: .cancel) {}
+        } message: {
+            Text(L10n.deleteSelectedScreenshotsConfirmation)
         }
         .overlay(alignment: .bottomTrailing) {
             if viewModel.summaryProgress.isVisible {
@@ -664,27 +728,61 @@ struct ControlPanelView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 12)], spacing: 12) {
-                    let timeBase = screenshotTimeBase
-                    let recordingSessions = viewModel.store.recordingSessions
-                    ForEach(viewModel.screenshots, id: \.id) { screenshot in
-                        ScreenshotThumbnailView(
-                            screenshot: screenshot,
-                            timestamp: Formatters.elapsedHHmmss(
-                                at: screenshot.capturedAt,
-                                sessionId: screenshot.sessionId,
-                                sessions: recordingSessions,
-                                fallbackTimeBase: timeBase
-                            ),
-                            viewModel: viewModel,
-                            expandedScreenshot: $expandedScreenshot
-                        )
-                    }
-                }
+            VStack(spacing: 0) {
+                ScreenshotManagementToolbar(
+                    layout: $screenshotGridLayout,
+                    isSelecting: $isSelectingScreenshots,
+                    selectedCount: selectedScreenshotIds.count,
+                    canSelectAll: selectedScreenshotIds.count < viewModel.screenshots.count,
+                    isDeletionDisabled: viewModel.isSummaryGenerating || viewModel.isDeletingScreenshots,
+                    selectAll: selectAllScreenshots,
+                    deleteSelected: deleteSelectedScreenshots
+                )
                 .padding(12)
+
+                Divider()
+
+                ScrollView {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: screenshotGridLayout.minimumWidth), spacing: 12)],
+                        spacing: 12
+                    ) {
+                        let timeBase = screenshotTimeBase
+                        let recordingSessions = viewModel.store.recordingSessions
+                        ForEach(viewModel.screenshots, id: \.id) { screenshot in
+                            ScreenshotThumbnailView(
+                                screenshot: screenshot,
+                                timestamp: Formatters.elapsedHHmmss(
+                                    at: screenshot.capturedAt,
+                                    sessionId: screenshot.sessionId,
+                                    sessions: recordingSessions,
+                                    fallbackTimeBase: timeBase
+                                ),
+                                viewModel: viewModel,
+                                isSelecting: isSelectingScreenshots,
+                                expandedScreenshot: $expandedScreenshot,
+                                selectedScreenshotIds: $selectedScreenshotIds
+                            )
+                        }
+                    }
+                    .padding(12)
+                }
             }
         }
+    }
+
+    private func selectAllScreenshots() {
+        selectedScreenshotIds = Set(viewModel.screenshots.map(\.id))
+    }
+
+    private func deleteSelectedScreenshots() {
+        isConfirmingScreenshotDeletion = true
+    }
+
+    private func confirmDeleteSelectedScreenshots() {
+        viewModel.deleteScreenshots(ids: selectedScreenshotIds)
+        selectedScreenshotIds.removeAll()
+        isSelectingScreenshots = false
     }
 
     // MARK: - Computed
