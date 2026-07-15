@@ -207,10 +207,17 @@ Application Support/Dahlia/BatchAudio/<meeting-id>/<session-id>/
 4. file descriptor に `F_FULLFSYNC` を実行する。失敗時は publish せず partial として残す。
 5. CAF が読み出せ、sample rate、channel count、`sealedFrameCount` が一致することを検証する。
 6. byte count と SHA-256 を計算する。hash はローカル DB にだけ保存し、telemetry へ送らない。
-7. 同じディレクトリ内で `partial.caf` を `caf` へ rename する。既存 final の事前削除や in-place 上書きをしない。
-8. SQLite transaction で segment を `ready` にし、final path、frame count、byte count、digest、`finalizedAt`、session timeline 上の
-   segment 終端を保存する。同じ transaction で、その音源について先頭から連続する `ready` segment を走査し、
+7. publish 前の SQLite transaction で、segment を `finalizing` のまま byte count、digest、検証済み format / frame metadata、
+   `integrityVerifiedAt` とともに永続化する。この transaction が commit するまでは rename しない。
+8. 同じディレクトリ内で `partial.caf` を `caf` へ rename する。既存 final の事前削除や in-place 上書きをしない。
+9. SQLite transaction で segment を `ready` にし、final path、`finalizedAt`、session timeline 上の segment 終端を保存する。
+   同じ transaction で、その音源について先頭から連続する `ready` segment を走査し、
    `durableThroughOffsetSeconds` と `lastContiguousReadySegmentIndex` を進める。途中に未確定 segment がある場合は cursor を進めない。
+
+publish 済みの final を recovery が自己認証してはならない。final を publish できるのは、その内容から計算した integrity metadata が
+先に SQLite へ commit されている場合だけとする。これにより step 8 の rename 後、step 9 の `ready` transaction 前に crash しても、
+reconciler は crash 前に確定した期待値と final を比較できる。期待値のない final は、その場で計算した digest が安定して見えても
+正常だった内容との一致を証明できないため、自動で `ready` にしない。
 
 `fsync` だけでは drive cache までの永続化を保証しないため、macOS がより強い順序保証として提供する `F_FULLFSYNC` を segment
 境界で使う。これを audio callback や buffer ごとには実行しない
@@ -247,9 +254,9 @@ segment の state は最低限、次を持つ。
 | DB state | file state | 収束方針 |
 |----------|------------|----------|
 | `recording` | partial のみ | owner がいなければ seal して `finalizing` へ進め、readable な最終 frame まで復旧する |
-| `recording` | final がある | 異常な crash window として final を検証し、`finalizing` を経て `ready` へ進める。選択が曖昧なら `failed` にする |
-| `finalizing` | partial のみ | 保存済み `sealedFrameCount` に従って確定 protocol を再開する |
-| `finalizing` | final がある | format、frame、byte、digest を検証し、一致すれば `ready` へ進める |
+| `recording` | final がある | 新 protocol では到達不能な状態とする。publish 前の期待 integrity metadata がなければ検証不能として file を保持し、`failed` にする |
+| `finalizing` | partial のみ | 保存済み `sealedFrameCount` に従って確定 protocol を再開する。integrity metadata が保存済みなら再比較し、一致した場合だけ publish する |
+| `finalizing` | final がある | publish 前に保存済みの format、frame、byte、digest がすべて存在する場合だけ final と比較し、一致すれば `ready` へ進める。期待値がなければ file を保持して `failed` にする |
 | `ready` | 一致する final | 変更しない |
 | `ready` | missing / mismatch | `failed` にし、自動再作成、自動上書き、自動削除を行わない |
 | `purgePending` | expected file が残存 | canonical root、generation、expected path を再検証して unlink を再試行し、不在確認後に `purged` へ進める |
@@ -258,6 +265,8 @@ segment の state は最低限、次を持つ。
 
 - partial と final の両方があり、一方だけが期待 metadata と一致する場合は一致する方を採用するが、他方を同じ処理内で削除しない。
 - 両方が valid だが内容が異なる、または metadata だけでは選べない場合は両方を保持して `failed` にし、自動上書き・自動削除しない。
+- `finalizing` の integrity metadata は、すべて揃った 1 transaction の commit を publish 許可の barrier とする。欠落または部分的な値を
+  final 自身から backfill して `ready` にしない。
 - `purgePending` の unlink が permission error、volume unavailable、その他の再試行可能な理由で失敗した場合は、参照と
   `purgePending` を残し、削除済みとは表示しない。
 - DB にない file、path 外 file、未知 generation は orphan として記録するが、age だけを理由に自動削除しない。
@@ -305,6 +314,7 @@ redacted ID だけを使う。
 - `byteCount`
 - `sha256`
 - `finalizationStartedAt`
+- `integrityVerifiedAt`
 - `purgeRequestedAt`
 - `purgedAt`
 - session 開始時に固定する `requiredSources`
@@ -362,7 +372,10 @@ source progress と別 transaction で更新しない。
 - 通常の二重起動が拒否され、`swift run` と署名済み app 等が競合した場合も process-wide lock を取得できない側が DB と音声を変更しない。
 - 録音 process が session lease を保持中は、別 process の recovery と deletion が skip / fail する。
 - process kill 後は lease が解放され、完成済み segment を変更せず active / finalizing の partial だけを復旧する。
-- `recording → finalizing` commit、close、`F_FULLFSYNC`、rename、`ready` commit の各直前・直後で crash しても、再実行で同じ state に収束する。
+- `recording → finalizing` commit、close、`F_FULLFSYNC`、integrity metadata commit、rename、`ready` commit の各直前・直後で crash しても、
+  再実行で同じ state に収束する。
+- rename 後・`ready` commit 前に crash した final は、publish 前に commit した byte count と SHA-256 に一致する場合だけ `ready` になり、
+  期待 integrity metadata がない場合や同じ byte count でも digest が異なる場合は `failed` になる。
 - `recording` / `finalizing` / `ready` と、partial only、final only、同一の両方、異なる両方、どちらもない、digest mismatch の matrix を確認する。
 - segment rotation 境界で frame の欠落・重複がなく、音源ごとの session offset が連続する。
 - finalization が 1 rotation 遅れた場合は backlog を使って録音を継続し、backlog 上限では active segment を伸長し、解消後に rotation を
