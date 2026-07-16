@@ -3,6 +3,9 @@ import SwiftUI
 struct CodexChatView: View {
     @Bindable var session: CodexChatSessionModel
     @Bindable var coordinator: CodexChatCoordinator
+    let meetings: [MeetingOverviewItem]
+    let meetingCatalogVaultID: UUID?
+    let isMeetingCatalogLoaded: Bool
     let allowsPopOut: Bool
     let onNewChat: () -> Void
     let onPopOut: () -> Void
@@ -31,6 +34,7 @@ struct CodexChatView: View {
             if showsHistory {
                 CodexChatHistoryView(
                     threads: coordinator.history,
+                    meetingNamesByID: session.meetingNamesByID,
                     hasMore: coordinator.historyCursor != nil,
                     isLoading: coordinator.isLoadingHistory,
                     onNewChat: startNewChat,
@@ -40,11 +44,16 @@ struct CodexChatView: View {
             } else if session.messages.isEmpty {
                 CodexChatEmptyStateView(
                     recentThreads: Array(coordinator.history.prefix(3)),
+                    meetingNamesByID: session.meetingNamesByID,
                     onOpenThread: openHistoryThread,
                     onShowAll: showHistory
                 )
             } else {
-                CodexChatConversationView(messages: session.messages)
+                CodexChatConversationView(
+                    messages: session.messages,
+                    meetingNamesByID: session.meetingNamesByID,
+                    meetingReferencesByID: session.meetingReferencesByID
+                )
             }
 
             if let errorMessage = session.errorMessage {
@@ -65,13 +74,31 @@ struct CodexChatView: View {
         }
         .background(.background)
         .task { await prepare() }
+        .onChange(of: meetings) {
+            updateMeetingCatalog()
+        }
+        .onChange(of: meetingCatalogVaultID) {
+            updateMeetingCatalog()
+        }
+        .onChange(of: isMeetingCatalogLoaded) {
+            updateMeetingCatalog()
+        }
     }
 
     private func prepare() async {
+        updateMeetingCatalog()
         await session.restore()
         if coordinator.history.isEmpty {
             await coordinator.refreshHistory()
         }
+    }
+
+    private func updateMeetingCatalog() {
+        session.updateAvailableMeetings(
+            meetings,
+            catalogVaultID: meetingCatalogVaultID,
+            isCatalogLoaded: isMeetingCatalogLoaded
+        )
     }
 
     private func showHistory() {

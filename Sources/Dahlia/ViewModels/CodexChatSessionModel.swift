@@ -18,10 +18,15 @@ final class CodexChatSessionModel: Identifiable {
     private(set) var errorMessage: String?
     private(set) var activeTurnID: String?
     private(set) var lastSubmittedText: String?
+    private(set) var availableMeetingReferences: [CodexChatMeetingReference] = []
+    private(set) var selectedMeetingReferenceIDs: [UUID] = []
+    private(set) var meetingNamesByID: [UUID: String] = [:]
+    private(set) var meetingReferencesByID: [UUID: CodexChatMeetingReference] = [:]
 
     @ObservationIgnored private let service: any CodexChatServicing
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let contextProvider: any CodexChatContextProviding
+    @ObservationIgnored private let streamingUpdateInterval: Duration
     @ObservationIgnored private var isStopRequested = false
     @ObservationIgnored private var isReleased = false
     @ObservationIgnored private var didUnsubscribe = false
@@ -36,7 +41,8 @@ final class CodexChatSessionModel: Identifiable {
         effort: String? = nil,
         service: any CodexChatServicing = CodexChatService.shared,
         settings: AppSettings = .shared,
-        contextProvider: any CodexChatContextProviding = CodexChatContextProvider()
+        contextProvider: any CodexChatContextProviding = CodexChatContextProvider(),
+        streamingUpdateInterval: Duration = .milliseconds(50)
     ) {
         self.id = id
         self.vaultID = vaultID ?? settings.currentVault?.id
@@ -48,6 +54,7 @@ final class CodexChatSessionModel: Identifiable {
         self.service = service
         self.settings = settings
         self.contextProvider = contextProvider
+        self.streamingUpdateInterval = streamingUpdateInterval
     }
 
     func prepare(forceRefresh: Bool = false) async {
@@ -104,13 +111,33 @@ final class CodexChatSessionModel: Identifiable {
     }
 
     func sendDraft() {
-        guard canSend, let text = draft.nilIfBlank else { return }
-        submit(text, clearsDraft: true)
+        guard canSend else { return }
+        let draftSnapshot = draft
+        let referenceIDsSnapshot = selectedMeetingReferenceIDs
+        let text = CodexChatMeetingReference.serializedText(
+            referenceIDs: referenceIDsSnapshot,
+            draft: draftSnapshot
+        )
+        submit(
+            text,
+            clearsDraft: true,
+            draftSnapshot: draftSnapshot,
+            referenceIDsSnapshot: referenceIDsSnapshot
+        )
     }
 
     func retry() {
         guard let lastSubmittedText else { return }
-        submit(lastSubmittedText, clearsDraft: draft == lastSubmittedText)
+        let currentText = CodexChatMeetingReference.serializedText(
+            referenceIDs: selectedMeetingReferenceIDs,
+            draft: draft
+        )
+        submit(
+            lastSubmittedText,
+            clearsDraft: currentText == lastSubmittedText,
+            draftSnapshot: draft,
+            referenceIDsSnapshot: selectedMeetingReferenceIDs
+        )
     }
 
     func stop() {
@@ -128,9 +155,16 @@ final class CodexChatSessionModel: Identifiable {
         }
         unsubscribeIfPossible()
     }
+}
 
-    private func runTurn(text: String, context: CodexChatContext?, responseID: String) async {
-        var accumulator = CodexChatTurnAccumulator()
+private extension CodexChatSessionModel {
+    func runTurn(text: String, context: CodexChatContext?, responseID: String) async {
+        let accumulator = CodexChatTurnAccumulator()
+        let updateLimiter = CodexChatStreamingUpdateLimiter(
+            minimumInterval: streamingUpdateInterval
+        ) { [weak self, accumulator] in
+            self?.updateTurnResponse(id: responseID, from: accumulator)
+        }
         do {
             if models.isEmpty {
                 await prepare()
@@ -159,29 +193,51 @@ final class CodexChatSessionModel: Identifiable {
                 model: selectedModelID.nilIfBlank,
                 effort: selectedEffort
             )
-            var turnCompleted = false
-            for try await event in stream {
-                apply(event, responseID: responseID, accumulator: &accumulator)
-                if case .completed(itemID: nil, text: nil) = event {
-                    turnCompleted = true
-                }
-            }
+            let turnCompleted = try await consumeTurnEvents(
+                stream,
+                accumulator: accumulator,
+                updateLimiter: updateLimiter
+            )
+            updateLimiter.submit(force: true)
+            completeTurnResponse(responseID: responseID)
             if turnCompleted {
                 await reconcileFromRollout(preservingReasoningFrom: responseID)
             }
         } catch is CancellationError {
+            updateLimiter.submit(force: true)
             completeTurnResponse(responseID: responseID)
         } catch {
             errorMessage = error.localizedDescription
+            updateLimiter.submit(force: true)
             completeTurnResponse(responseID: responseID)
         }
         finishGeneration()
     }
 
+    func consumeTurnEvents(
+        _ stream: AsyncThrowingStream<CodexChatTurnEvent, any Error>,
+        accumulator: CodexChatTurnAccumulator,
+        updateLimiter: CodexChatStreamingUpdateLimiter
+    ) async throws -> Bool {
+        var eventsSinceYield = 0
+        for try await event in stream {
+            apply(event, accumulator: accumulator, updateLimiter: updateLimiter)
+            if let completedSuccessfully = event.terminalCompletion {
+                return completedSuccessfully
+            }
+            eventsSinceYield += 1
+            if eventsSinceYield == Self.maximumEventsBetweenYields {
+                eventsSinceYield = 0
+                await Task.yield()
+            }
+        }
+        return false
+    }
+
     private func apply(
         _ event: CodexChatTurnEvent,
-        responseID: String,
-        accumulator: inout CodexChatTurnAccumulator
+        accumulator: CodexChatTurnAccumulator,
+        updateLimiter: CodexChatStreamingUpdateLimiter
     ) {
         switch event {
         case let .started(turnID):
@@ -191,23 +247,23 @@ final class CodexChatSessionModel: Identifiable {
             }
         case let .delta(itemID, text):
             accumulator.appendResponseDelta(itemID: itemID, text: text)
-            updateTurnResponse(id: responseID, from: accumulator)
+            updateLimiter.submit()
         case let .completed(itemID?, text):
             accumulator.completeResponse(itemID: itemID, text: text)
-            updateTurnResponse(id: responseID, from: accumulator)
+            updateLimiter.submit(force: true)
         case .completed(itemID: nil, text: _):
-            completeTurnResponse(responseID: responseID)
+            updateLimiter.submit(force: true)
         case let .reasoningDelta(itemID, summaryIndex, text):
             accumulator.appendReasoningDelta(itemID: itemID, summaryIndex: summaryIndex, text: text)
-            updateTurnResponse(id: responseID, from: accumulator)
+            updateLimiter.submit()
         case let .reasoningCompleted(itemID, text):
             accumulator.completeReasoning(itemID: itemID, text: text)
-            updateTurnResponse(id: responseID, from: accumulator)
+            updateLimiter.submit(force: true)
         case .interrupted:
-            completeTurnResponse(responseID: responseID)
+            updateLimiter.submit(force: true)
         case let .failed(message):
             errorMessage = CodexAppServerError.turnFailed(message).localizedDescription
-            completeTurnResponse(responseID: responseID)
+            updateLimiter.submit(force: true)
         }
     }
 
@@ -235,8 +291,14 @@ final class CodexChatSessionModel: Identifiable {
 
     private func updateTurnResponse(id: String, from accumulator: CodexChatTurnAccumulator) {
         guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
-        messages[index].text = accumulator.responseText
-        messages[index].reasoning = accumulator.reasoningText
+        let responseText = accumulator.responseText
+        let reasoningText = accumulator.reasoningText
+        if messages[index].text != responseText {
+            messages[index].text = responseText
+        }
+        if messages[index].reasoning != reasoningText {
+            messages[index].reasoning = reasoningText
+        }
     }
 
     private func reconcileFromRollout(preservingReasoningFrom responseID: String) async {
@@ -269,6 +331,8 @@ final class CodexChatSessionModel: Identifiable {
         isStopRequested = false
         unsubscribeIfPossible()
     }
+
+    private static let maximumEventsBetweenYields = 64
 
     private func unsubscribeIfPossible() {
         guard isReleased,
@@ -303,7 +367,12 @@ final class CodexChatSessionModel: Identifiable {
 }
 
 private extension CodexChatSessionModel {
-    func submit(_ text: String, clearsDraft: Bool) {
+    func submit(
+        _ text: String,
+        clearsDraft: Bool,
+        draftSnapshot: String? = nil,
+        referenceIDsSnapshot: [UUID] = []
+    ) {
         guard isBoundToCurrentVault,
               !isGenerating,
               text.nilIfBlank != nil else { return }
@@ -311,11 +380,21 @@ private extension CodexChatSessionModel {
         errorMessage = nil
 
         Task { [weak self] in
-            await self?.resolveContextAndRunTurn(text: text, clearsDraft: clearsDraft)
+            await self?.resolveContextAndRunTurn(
+                text: text,
+                clearsDraft: clearsDraft,
+                draftSnapshot: draftSnapshot ?? text,
+                referenceIDsSnapshot: referenceIDsSnapshot
+            )
         }
     }
 
-    func resolveContextAndRunTurn(text: String, clearsDraft: Bool) async {
+    func resolveContextAndRunTurn(
+        text: String,
+        clearsDraft: Bool,
+        draftSnapshot: String,
+        referenceIDsSnapshot: [UUID]
+    ) async {
         let context: CodexChatContext?
         do {
             guard let vaultID else { throw CodexAppServerError.invalidProtocolResponse }
@@ -332,8 +411,13 @@ private extension CodexChatSessionModel {
             finishGeneration()
             return
         }
-        if clearsDraft, draft == text {
-            draft = ""
+        if clearsDraft {
+            if draft == draftSnapshot {
+                draft = ""
+            }
+            if selectedMeetingReferenceIDs == referenceIDsSnapshot {
+                selectedMeetingReferenceIDs = []
+            }
         }
         lastSubmittedText = text
         messages.append(CodexChatMessage(role: .user, text: text, context: context))
@@ -346,13 +430,13 @@ private extension CodexChatSessionModel {
 
 extension CodexChatSessionModel {
     var displayTitle: String {
-        title.nilIfBlank ?? L10n.newChat
+        displayText(title.nilIfBlank ?? L10n.newChat)
     }
 
     var canSend: Bool {
         isBoundToCurrentVault
             && !isGenerating
-            && draft.nilIfBlank != nil
+            && (draft.nilIfBlank != nil || !selectedMeetingReferenceIDs.isEmpty)
     }
 
     var effortOptions: [CodexReasoningEffortOption] {
@@ -364,5 +448,45 @@ extension CodexChatSessionModel {
 
     var isBoundToCurrentVault: Bool {
         vaultID != nil && vaultID == settings.currentVault?.id
+    }
+}
+
+extension CodexChatSessionModel {
+    func updateAvailableMeetings(
+        _ meetings: [MeetingOverviewItem],
+        catalogVaultID: UUID?,
+        isCatalogLoaded: Bool = true
+    ) {
+        guard let vaultID, catalogVaultID == vaultID else { return }
+        let references = meetings
+            .filter { $0.vaultId == vaultID }
+            .map(CodexChatMeetingReference.init)
+        availableMeetingReferences = references
+        for reference in references {
+            meetingNamesByID[reference.id] = reference.name
+            meetingReferencesByID[reference.id] = reference
+        }
+        guard isCatalogLoaded else { return }
+        let availableIDs = Set(references.map(\.id))
+        selectedMeetingReferenceIDs.removeAll { !availableIDs.contains($0) }
+    }
+
+    func addMeetingReference(_ reference: CodexChatMeetingReference) {
+        guard !selectedMeetingReferenceIDs.contains(reference.id) else { return }
+        selectedMeetingReferenceIDs.append(reference.id)
+        meetingNamesByID[reference.id] = reference.name
+        meetingReferencesByID[reference.id] = reference
+    }
+
+    func removeMeetingReference(id: UUID) {
+        selectedMeetingReferenceIDs.removeAll { $0 == id }
+    }
+
+    func meetingDisplayName(for id: UUID) -> String {
+        meetingNamesByID[id] ?? L10n.meetingUnavailable
+    }
+
+    func displayText(_ text: String) -> String {
+        CodexChatMeetingReference.displayText(for: text, namesByID: meetingNamesByID)
     }
 }

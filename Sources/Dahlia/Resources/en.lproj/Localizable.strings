@@ -687,6 +687,12 @@
 "Thought process" = "Thought process";
 "Selected" = "Selected";
 "Response performance" = "Response performance";
+"Meeting references" = "Meeting references";
+"Add meeting reference" = "Add meeting reference";
+"Remove meeting reference %@" = "Remove meeting reference %@";
+"No matching meetings" = "No matching meetings";
+"Meeting unavailable" = "Meeting unavailable";
+"Show meeting details" = "Show meeting details";
 
 /* MCP */
 "MCP" = "MCP";
