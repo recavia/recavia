@@ -9,7 +9,7 @@ struct CodexChatView: View {
     let allowsPopOut: Bool
     let onNewChat: () -> Void
     let onPopOut: () -> Void
-    let onHide: () -> Void
+    let onHide: (() -> Void)?
     let onOpenHistory: (CodexChatThreadSummary) -> Void
     var onHeaderDragChanged: ((CGSize) -> Void)?
     var onHeaderDragEnded: ((CGSize) -> Void)?
