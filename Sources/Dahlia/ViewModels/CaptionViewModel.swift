@@ -209,7 +209,8 @@ final class CaptionViewModel: ObservableObject {
         let content = SummaryShareRenderer.render(
             document: currentSummaryDocument,
             actionItemsHeading: L10n.actionItems,
-            for: destination
+            for: destination,
+            screenshots: screenshots
         )
         guard content.markdown.nilIfBlank != nil else { return }
         SummaryPasteboardWriter.write(content)

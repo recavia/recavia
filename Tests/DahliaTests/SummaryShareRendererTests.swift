@@ -70,6 +70,48 @@ import Foundation
         }
 
         @Test
+        func embedsReferencedScreenshotOnlyInGoogleDocsHTML() throws {
+            let screenshotID = UUID.v7()
+            let screenshot = MeetingScreenshotRecord(
+                id: screenshotID,
+                meetingId: .v7(),
+                capturedAt: .now,
+                imageData: try makePNGData(),
+                mimeType: "image/png"
+            )
+            let document = SummaryDocument(
+                title: "Summary",
+                sections: [
+                    SummarySection(
+                        id: .v7(),
+                        heading: "",
+                        blocks: [.image(screenshotId: screenshotID, caption: "Launch <screen>")]
+                    ),
+                ]
+            )
+
+            let googleDocsContent = SummaryShareRenderer.render(
+                document: document,
+                actionItemsHeading: "Action Items",
+                for: .googleDocs,
+                screenshots: [screenshot]
+            )
+            let slackContent = SummaryShareRenderer.render(
+                document: document,
+                actionItemsHeading: "Action Items",
+                for: .slack,
+                screenshots: [screenshot]
+            )
+
+            #expect(googleDocsContent.html.contains("<img src=\"data:image/png;base64,"))
+            #expect(googleDocsContent.html.contains("alt=\"Launch &lt;screen&gt;\""))
+            #expect(googleDocsContent.html.contains("<figcaption><em>Launch &lt;screen&gt;</em></figcaption>"))
+            #expect(googleDocsContent.markdown.contains("Launch <screen>"))
+            #expect(!slackContent.html.contains("<img"))
+            #expect(slackContent.html.contains("<em>Launch &lt;screen&gt;</em>"))
+        }
+
+        @Test
         func rendersSlackHeadingsAndExplicitLineBreaks() {
             let document = SummaryDocument(
                 title: "Weekly Sync",
@@ -166,6 +208,27 @@ import Foundation
             #expect(items.count == 1)
             #expect(item.string(forType: .html) == content.html)
             #expect(item.string(forType: .string) == content.markdown)
+        }
+
+        private func makePNGData() throws -> Data {
+            let bitmap = try #require(NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: 1,
+                pixelsHigh: 1,
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bytesPerRow: 0,
+                bitsPerPixel: 0
+            ))
+            let pixels = try #require(bitmap.bitmapData)
+            pixels[0] = 255
+            pixels[1] = 0
+            pixels[2] = 0
+            pixels[3] = 255
+            return try #require(bitmap.representation(using: .png, properties: [:]))
         }
     }
 #endif

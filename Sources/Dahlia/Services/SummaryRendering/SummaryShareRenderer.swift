@@ -28,10 +28,17 @@ enum SummaryShareRenderer {
     static func render(
         document: SummaryDocument,
         actionItemsHeading: String,
-        for destination: Destination
+        for destination: Destination,
+        screenshots: [MeetingScreenshotRecord] = []
     ) -> SummaryShareContent {
-        SummaryShareContent(
-            html: renderHTML(document: document, actionItemsHeading: actionItemsHeading, destination: destination),
+        let screenshotsByID = Dictionary(uniqueKeysWithValues: screenshots.map { ($0.id, $0) })
+        return SummaryShareContent(
+            html: renderHTML(
+                document: document,
+                actionItemsHeading: actionItemsHeading,
+                destination: destination,
+                screenshotsByID: screenshotsByID
+            ),
             markdown: renderMarkdown(document: document, actionItemsHeading: actionItemsHeading)
         )
     }
@@ -142,7 +149,8 @@ enum SummaryShareRenderer {
     private static func renderHTML(
         document: SummaryDocument,
         actionItemsHeading: String,
-        destination: Destination
+        destination: Destination,
+        screenshotsByID: [UUID: MeetingScreenshotRecord]
     ) -> String {
         var chunks: [String] = []
 
@@ -151,7 +159,7 @@ enum SummaryShareRenderer {
         }
 
         chunks.append(contentsOf: document.sections.compactMap { section in
-            renderHTMLSection(section, destination: destination)
+            renderHTMLSection(section, destination: destination, screenshotsByID: screenshotsByID)
         })
 
         if let actionItems = renderHTMLActionItems(
@@ -174,7 +182,11 @@ enum SummaryShareRenderer {
         """
     }
 
-    private static func renderHTMLSection(_ section: SummarySection, destination: Destination) -> String? {
+    private static func renderHTMLSection(
+        _ section: SummarySection,
+        destination: Destination,
+        screenshotsByID: [UUID: MeetingScreenshotRecord]
+    ) -> String? {
         var chunks: [String] = []
 
         if let heading = normalizedInlineMarkdown(section.heading).nilIfBlank {
@@ -182,7 +194,7 @@ enum SummaryShareRenderer {
         }
 
         chunks.append(contentsOf: section.blocks.compactMap { block in
-            renderHTMLBlock(block, destination: destination)
+            renderHTMLBlock(block, destination: destination, screenshotsByID: screenshotsByID)
         })
         guard !chunks.isEmpty else { return nil }
 
@@ -195,7 +207,11 @@ enum SummaryShareRenderer {
         }
     }
 
-    private static func renderHTMLBlock(_ block: SummaryBlock, destination: Destination) -> String? {
+    private static func renderHTMLBlock(
+        _ block: SummaryBlock,
+        destination: Destination,
+        screenshotsByID: [UUID: MeetingScreenshotRecord]
+    ) -> String? {
         switch block.content {
         case let .paragraph(text):
             htmlParagraph(text.text, destination: destination)
@@ -209,16 +225,13 @@ enum SummaryShareRenderer {
             htmlParagraph(text.text, destination: destination).map { "<blockquote>\($0)</blockquote>" }
         case let .code(_, content):
             content.text.nilIfBlank.map { "<pre><code>\(escapeHTML($0))</code></pre>" }
-        case let .image(_, caption):
-            normalizedInlineMarkdown(caption.text).nilIfBlank.map {
-                let html = "<em>\(renderInlineHTML($0))</em>"
-                switch destination {
-                case .googleDocs:
-                    return "<p>\(html)</p>"
-                case .slack:
-                    return html
-                }
-            }
+        case let .image(screenshotID, caption):
+            renderHTMLImage(
+                screenshotID: screenshotID,
+                caption: caption.text,
+                destination: destination,
+                screenshotsByID: screenshotsByID
+            )
         case let .heading(level, content):
             normalizedInlineMarkdown(content.text).nilIfBlank.map {
                 let headingLevel = destination == .googleDocs ? clampedHeadingLevel(level) : level
@@ -227,6 +240,29 @@ enum SummaryShareRenderer {
         case let .table(headers, rows):
             renderHTMLTable(headers: headers, rows: rows, destination: destination)
         }
+    }
+
+    private static func renderHTMLImage(
+        screenshotID: UUID,
+        caption: String,
+        destination: Destination,
+        screenshotsByID: [UUID: MeetingScreenshotRecord]
+    ) -> String? {
+        let normalizedCaption = normalizedInlineMarkdown(caption).nilIfBlank
+        let captionHTML = normalizedCaption.map { "<em>\(renderInlineHTML($0))</em>" }
+
+        guard destination == .googleDocs else { return captionHTML }
+
+        guard let screenshot = screenshotsByID[screenshotID],
+              let mimeType = ImageEncoder.mimeType(for: screenshot.imageData) else {
+            return captionHTML.map { "<p>\($0)</p>" }
+        }
+
+        let source = "data:\(mimeType);base64,\(screenshot.imageData.base64EncodedString())"
+        let alt = normalizedCaption.map { " alt=\"\(escapeHTMLAttribute($0))\"" } ?? ""
+        let image = "<img src=\"\(source)\"\(alt)>"
+        guard let captionHTML else { return image }
+        return "<figure>\n\(image)\n<figcaption>\(captionHTML)</figcaption>\n</figure>"
     }
 
     private static func htmlParagraph(_ text: String, destination: Destination) -> String? {
