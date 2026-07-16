@@ -114,14 +114,16 @@ modifier_order:
   preferred_modifier_order:
     - acl
     - setterACL
+    - isolation
     - override
     - dynamic
-    - mutating
+    - mutators
     - lazy
     - final
     - required
     - convenience
     - typeMethods
+    - owned
 
 large_tuple:
   warning: 3
