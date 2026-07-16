@@ -20,7 +20,8 @@ enum GoogleOAuthScope {
         "profile",
     ]
     static let calendar: Set = [
-        "https://www.googleapis.com/auth/calendar.readonly",
+        "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+        "https://www.googleapis.com/auth/calendar.events.readonly",
     ]
     static let drive: Set = [
         "https://www.googleapis.com/auth/drive.file",

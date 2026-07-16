@@ -7,6 +7,14 @@ import Testing
 @MainActor
 struct GoogleCalendarConfigurationTests {
     @Test
+    func calendarAuthorizationUsesCalendarListAndEventScopesOnly() {
+        #expect(GoogleOAuthScope.calendar == [
+            "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+            "https://www.googleapis.com/auth/calendar.events.readonly",
+        ])
+    }
+
+    @Test
     func clientIDIsReadFromEnvironment() {
         withTemporaryGoogleOAuthOverrides {
             withTemporaryEnvironmentValue("GOOGLE_CLIENT_ID", value: "client-id-from-env") {
