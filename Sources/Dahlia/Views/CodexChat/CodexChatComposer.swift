@@ -28,7 +28,7 @@ struct CodexChatComposer: View {
                     .background(.quaternary, in: Circle())
                     .contentShape(Circle())
                     .help(L10n.addMeetingReference)
-                    .popover(isPresented: $isMeetingPickerPresented, arrowEdge: .bottom) {
+                    .popover(isPresented: $isMeetingPickerPresented, arrowEdge: .top) {
                         CodexChatMeetingPicker(
                             references: suggestions,
                             highlightedID: highlightedMeetingID,

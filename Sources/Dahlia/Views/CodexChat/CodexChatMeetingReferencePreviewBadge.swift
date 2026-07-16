@@ -12,7 +12,7 @@ struct CodexChatMeetingReferencePreviewBadge: View {
         }
         .buttonStyle(.plain)
         .onHover(perform: showDetailsOnHover)
-        .popover(isPresented: $isDetailPresented, arrowEdge: .bottom) {
+        .popover(isPresented: $isDetailPresented, arrowEdge: .top) {
             CodexChatMeetingReferenceDetailView(name: name, reference: reference)
         }
         .accessibilityValue(accessibilityValue)
