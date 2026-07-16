@@ -509,12 +509,17 @@ import Foundation
             }
             Issue.record("Timed out waiting for asynchronous chat state")
         }
+
     }
 
     actor TestCodexChatService: CodexChatServicing {
         enum Mode {
             case complete
             case block
+            case burstThenBlock
+            case bufferedBurstThenInterrupt
+            case finishesWithoutTerminal
+            case interruptedThenBlock
             case staleRollout
             case rolloutWithoutReasoning
             case multipleMessages
@@ -545,7 +550,8 @@ import Foundation
 
         func loadThread(id: String) async throws -> CodexChatThread {
             let assistantMessages: [CodexChatMessage] = switch mode {
-            case .complete, .block:
+            case .complete, .block, .burstThenBlock, .bufferedBurstThenInterrupt,
+                 .finishesWithoutTerminal, .interruptedThenBlock:
                 [CodexChatMessage(role: .assistant, text: "Final answer", reasoning: "Considered the question")]
             case .rolloutWithoutReasoning:
                 [CodexChatMessage(role: .assistant, text: "Final answer")]
@@ -610,6 +616,23 @@ import Foundation
                 continuation.finish()
             case .block:
                 continuation.yield(.delta(itemID: "item-1", text: "Partial"))
+                blockedContinuation = continuation
+            case .burstThenBlock:
+                continuation.yield(.delta(itemID: "item-1", text: "First"))
+                continuation.yield(.delta(itemID: "item-1", text: " second"))
+                blockedContinuation = continuation
+            case .bufferedBurstThenInterrupt:
+                for _ in 0 ..< 2048 {
+                    continuation.yield(.delta(itemID: "item-1", text: "x"))
+                }
+                continuation.yield(.interrupted)
+                continuation.finish()
+            case .finishesWithoutTerminal:
+                continuation.yield(.delta(itemID: "item-1", text: "Partial answer"))
+                continuation.finish()
+            case .interruptedThenBlock:
+                continuation.yield(.delta(itemID: "item-1", text: "Partial answer"))
+                continuation.yield(.interrupted)
                 blockedContinuation = continuation
             case .multipleMessages:
                 continuation.yield(.delta(itemID: "item-1", text: "First "))

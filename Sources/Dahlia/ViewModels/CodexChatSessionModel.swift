@@ -26,6 +26,7 @@ final class CodexChatSessionModel: Identifiable {
     @ObservationIgnored private let service: any CodexChatServicing
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let contextProvider: any CodexChatContextProviding
+    @ObservationIgnored private let streamingUpdateInterval: Duration
     @ObservationIgnored private var isStopRequested = false
     @ObservationIgnored private var isReleased = false
     @ObservationIgnored private var didUnsubscribe = false
@@ -40,7 +41,8 @@ final class CodexChatSessionModel: Identifiable {
         effort: String? = nil,
         service: any CodexChatServicing = CodexChatService.shared,
         settings: AppSettings = .shared,
-        contextProvider: any CodexChatContextProviding = CodexChatContextProvider()
+        contextProvider: any CodexChatContextProviding = CodexChatContextProvider(),
+        streamingUpdateInterval: Duration = .milliseconds(50)
     ) {
         self.id = id
         self.vaultID = vaultID ?? settings.currentVault?.id
@@ -52,6 +54,7 @@ final class CodexChatSessionModel: Identifiable {
         self.service = service
         self.settings = settings
         self.contextProvider = contextProvider
+        self.streamingUpdateInterval = streamingUpdateInterval
     }
 
     func prepare(forceRefresh: Bool = false) async {
@@ -152,9 +155,16 @@ final class CodexChatSessionModel: Identifiable {
         }
         unsubscribeIfPossible()
     }
+}
 
-    private func runTurn(text: String, context: CodexChatContext?, responseID: String) async {
-        var accumulator = CodexChatTurnAccumulator()
+private extension CodexChatSessionModel {
+    func runTurn(text: String, context: CodexChatContext?, responseID: String) async {
+        let accumulator = CodexChatTurnAccumulator()
+        let updateLimiter = CodexChatStreamingUpdateLimiter(
+            minimumInterval: streamingUpdateInterval
+        ) { [weak self, accumulator] in
+            self?.updateTurnResponse(id: responseID, from: accumulator)
+        }
         do {
             if models.isEmpty {
                 await prepare()
@@ -183,29 +193,51 @@ final class CodexChatSessionModel: Identifiable {
                 model: selectedModelID.nilIfBlank,
                 effort: selectedEffort
             )
-            var turnCompleted = false
-            for try await event in stream {
-                apply(event, responseID: responseID, accumulator: &accumulator)
-                if case .completed(itemID: nil, text: nil) = event {
-                    turnCompleted = true
-                }
-            }
+            let turnCompleted = try await consumeTurnEvents(
+                stream,
+                accumulator: accumulator,
+                updateLimiter: updateLimiter
+            )
+            updateLimiter.submit(force: true)
+            completeTurnResponse(responseID: responseID)
             if turnCompleted {
                 await reconcileFromRollout(preservingReasoningFrom: responseID)
             }
         } catch is CancellationError {
+            updateLimiter.submit(force: true)
             completeTurnResponse(responseID: responseID)
         } catch {
             errorMessage = error.localizedDescription
+            updateLimiter.submit(force: true)
             completeTurnResponse(responseID: responseID)
         }
         finishGeneration()
     }
 
+    func consumeTurnEvents(
+        _ stream: AsyncThrowingStream<CodexChatTurnEvent, any Error>,
+        accumulator: CodexChatTurnAccumulator,
+        updateLimiter: CodexChatStreamingUpdateLimiter
+    ) async throws -> Bool {
+        var eventsSinceYield = 0
+        for try await event in stream {
+            apply(event, accumulator: accumulator, updateLimiter: updateLimiter)
+            if let completedSuccessfully = event.terminalCompletion {
+                return completedSuccessfully
+            }
+            eventsSinceYield += 1
+            if eventsSinceYield == Self.maximumEventsBetweenYields {
+                eventsSinceYield = 0
+                await Task.yield()
+            }
+        }
+        return false
+    }
+
     private func apply(
         _ event: CodexChatTurnEvent,
-        responseID: String,
-        accumulator: inout CodexChatTurnAccumulator
+        accumulator: CodexChatTurnAccumulator,
+        updateLimiter: CodexChatStreamingUpdateLimiter
     ) {
         switch event {
         case let .started(turnID):
@@ -215,23 +247,23 @@ final class CodexChatSessionModel: Identifiable {
             }
         case let .delta(itemID, text):
             accumulator.appendResponseDelta(itemID: itemID, text: text)
-            updateTurnResponse(id: responseID, from: accumulator)
+            updateLimiter.submit()
         case let .completed(itemID?, text):
             accumulator.completeResponse(itemID: itemID, text: text)
-            updateTurnResponse(id: responseID, from: accumulator)
+            updateLimiter.submit(force: true)
         case .completed(itemID: nil, text: _):
-            completeTurnResponse(responseID: responseID)
+            updateLimiter.submit(force: true)
         case let .reasoningDelta(itemID, summaryIndex, text):
             accumulator.appendReasoningDelta(itemID: itemID, summaryIndex: summaryIndex, text: text)
-            updateTurnResponse(id: responseID, from: accumulator)
+            updateLimiter.submit()
         case let .reasoningCompleted(itemID, text):
             accumulator.completeReasoning(itemID: itemID, text: text)
-            updateTurnResponse(id: responseID, from: accumulator)
+            updateLimiter.submit(force: true)
         case .interrupted:
-            completeTurnResponse(responseID: responseID)
+            updateLimiter.submit(force: true)
         case let .failed(message):
             errorMessage = CodexAppServerError.turnFailed(message).localizedDescription
-            completeTurnResponse(responseID: responseID)
+            updateLimiter.submit(force: true)
         }
     }
 
@@ -259,8 +291,14 @@ final class CodexChatSessionModel: Identifiable {
 
     private func updateTurnResponse(id: String, from accumulator: CodexChatTurnAccumulator) {
         guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
-        messages[index].text = accumulator.responseText
-        messages[index].reasoning = accumulator.reasoningText
+        let responseText = accumulator.responseText
+        let reasoningText = accumulator.reasoningText
+        if messages[index].text != responseText {
+            messages[index].text = responseText
+        }
+        if messages[index].reasoning != reasoningText {
+            messages[index].reasoning = reasoningText
+        }
     }
 
     private func reconcileFromRollout(preservingReasoningFrom responseID: String) async {
@@ -293,6 +331,8 @@ final class CodexChatSessionModel: Identifiable {
         isStopRequested = false
         unsubscribeIfPossible()
     }
+
+    private static let maximumEventsBetweenYields = 64
 
     private func unsubscribeIfPossible() {
         guard isReleased,

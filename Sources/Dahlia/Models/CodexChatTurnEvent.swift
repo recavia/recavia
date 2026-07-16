@@ -8,4 +8,15 @@ enum CodexChatTurnEvent: Equatable {
     case reasoningCompleted(itemID: String, text: String)
     case interrupted
     case failed(message: String?)
+
+    var terminalCompletion: Bool? {
+        switch self {
+        case .completed(itemID: nil, text: _):
+            true
+        case .interrupted, .failed:
+            false
+        default:
+            nil
+        }
+    }
 }

@@ -1,6 +1,7 @@
 import Foundation
 
-struct CodexChatTurnAccumulator {
+@MainActor
+final class CodexChatTurnAccumulator {
     private var responseItemIDs: [String] = []
     private var responseTexts: [String: String] = [:]
     private var reasoningItemIDs: [String] = []
@@ -21,37 +22,37 @@ struct CodexChatTurnAccumulator {
         .joined(separator: "\n\n")
     }
 
-    mutating func appendResponseDelta(itemID: String, text: String) {
+    func appendResponseDelta(itemID: String, text: String) {
         registerResponseItem(itemID)
         responseTexts[itemID, default: ""] += text
     }
 
-    mutating func completeResponse(itemID: String, text: String?) {
+    func completeResponse(itemID: String, text: String?) {
         registerResponseItem(itemID)
         if let text {
             responseTexts[itemID] = text
         }
     }
 
-    mutating func appendReasoningDelta(itemID: String, summaryIndex: Int, text: String) {
+    func appendReasoningDelta(itemID: String, summaryIndex: Int, text: String) {
         registerReasoningItem(itemID)
         reasoningSections[itemID, default: [:]][summaryIndex, default: ""] += text
     }
 
-    mutating func completeReasoning(itemID: String, text: String) {
+    func completeReasoning(itemID: String, text: String) {
         registerReasoningItem(itemID)
         if let text = text.nilIfBlank {
             reasoningSections[itemID] = [0: text]
         }
     }
 
-    private mutating func registerResponseItem(_ itemID: String) {
+    private func registerResponseItem(_ itemID: String) {
         guard responseTexts[itemID] == nil else { return }
         responseItemIDs.append(itemID)
         responseTexts[itemID] = ""
     }
 
-    private mutating func registerReasoningItem(_ itemID: String) {
+    private func registerReasoningItem(_ itemID: String) {
         guard reasoningSections[itemID] == nil else { return }
         reasoningItemIDs.append(itemID)
         reasoningSections[itemID] = [:]
