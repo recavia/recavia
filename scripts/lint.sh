@@ -16,9 +16,9 @@ if ! command -v swiftformat &>/dev/null; then
 fi
 
 if [[ "$is_ci" == "true" ]]; then
-    swiftformat --lint Sources/
+    swiftformat --cache ignore --lint Sources/
 else
-    swiftformat Sources/
+    swiftformat --cache ignore Sources/
 fi
 echo "SwiftFormat: done"
 
@@ -33,11 +33,18 @@ if ! command -v swiftlint &>/dev/null; then
     exit 0
 fi
 
+swiftlint_command=(swiftlint)
+if [[ -z "${DEVELOPER_DIR:-}" ]] \
+    && [[ "$(xcode-select -p 2>/dev/null || true)" == "/Library/Developer/CommandLineTools" ]] \
+    && [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+    swiftlint_command=(env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swiftlint)
+fi
+
 if [[ "$is_ci" == "true" ]]; then
-    if ! swiftlint lint --quiet; then
+    if ! "${swiftlint_command[@]}" lint --quiet --no-cache; then
         echo "SwiftLint reported violations. Keeping non-blocking until existing violations are cleaned up."
     fi
 else
-    swiftlint lint --quiet || true
+    "${swiftlint_command[@]}" lint --quiet --no-cache || true
 fi
 echo "SwiftLint: done"
