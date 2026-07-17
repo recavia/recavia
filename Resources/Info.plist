@@ -3,19 +3,19 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Dahlia</string>
+    <string>Recavia</string>
     <key>CFBundleDisplayName</key>
-    <string>Dahlia</string>
+    <string>Recavia</string>
     <key>CFBundleIdentifier</key>
-    <string>com.dahlia.app</string>
+    <string>com.recavia.app</string>
     <key>CFBundleVersion</key>
-    <string>22</string>
+    <string>23</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.5.6</string>
+    <string>0.6.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
-    <string>Dahlia</string>
+    <string>Recavia</string>
     <key>LSMinimumSystemVersion</key>
     <string>26.0</string>
     <key>LSMultipleInstancesProhibited</key>

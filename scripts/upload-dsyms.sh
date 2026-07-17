@@ -12,7 +12,7 @@ if [ $# -lt 1 ]; then
 fi
 
 BUILD_DIR="$1"
-APP_NAME="${2:-Dahlia}"
+APP_NAME="${2:-Recavia}"
 DSYM_PATH="${BUILD_DIR}/${APP_NAME}.dSYM"
 EXECUTABLE_PATH="${BUILD_DIR}/${APP_NAME}"
 DSYM_EXECUTABLE_PATH="${DSYM_PATH}/Contents/Resources/DWARF/${APP_NAME}"
@@ -25,8 +25,8 @@ if [ -f .env.local ]; then
     set +a
 fi
 
-SENTRY_ORG="${SENTRY_ORG:-dahlia-app}"
-SENTRY_PROJECT="${SENTRY_PROJECT:-dahlia-app}"
+SENTRY_ORG="${SENTRY_ORG:-recavia-app}"
+SENTRY_PROJECT="${SENTRY_PROJECT:-recavia-app}"
 
 if [ -z "${SENTRY_AUTH_TOKEN:-}" ]; then
     echo "error: SENTRY_AUTH_TOKEN is required to upload dSYM files" >&2
