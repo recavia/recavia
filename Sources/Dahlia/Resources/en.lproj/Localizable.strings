@@ -710,6 +710,7 @@
 "Hide chat" = "Hide chat";
 "Send message" = "Send message";
 "Stop generating" = "Stop generating";
+"Thinking" = "Thinking";
 "Message Codex" = "Message Codex";
 "Open AI Connection Settings" = "Open AI Connection Settings";
 "Loading models…" = "Loading models…";

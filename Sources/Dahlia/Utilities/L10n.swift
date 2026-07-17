@@ -1412,6 +1412,7 @@ enum L10n {
     static var hideChat: String { String(localized: "Hide chat", bundle: bundle) }
     static var sendMessage: String { String(localized: "Send message", bundle: bundle) }
     static var stopGenerating: String { String(localized: "Stop generating", bundle: bundle) }
+    static var chatThinking: String { String(localized: "Thinking", bundle: bundle) }
     static var messageCodex: String { String(localized: "Message Codex", bundle: bundle) }
     static var openAISettings: String { String(localized: "Open AI Connection Settings", bundle: bundle) }
     static var chatModelLoading: String { String(localized: "Loading models…", bundle: bundle) }

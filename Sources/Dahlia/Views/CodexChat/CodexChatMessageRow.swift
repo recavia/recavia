@@ -37,8 +37,7 @@ struct CodexChatMessageRow: View {
                     }
 
                     if message.text.isEmpty, message.isStreaming {
-                        ProgressView()
-                            .controlSize(.small)
+                        CodexChatThinkingIndicator()
                     } else if !displayText.isEmpty {
                         if message.isStreaming {
                             Text(displayText)
