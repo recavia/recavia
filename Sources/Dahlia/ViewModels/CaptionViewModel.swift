@@ -103,6 +103,8 @@ final class CaptionViewModel: ObservableObject {
     }
 
     let liveCaptionStore = LiveCaptionStore()
+    var finalizedLiveTranscriptHandler: (@MainActor (String) -> Void)?
+    var chatLiveModeFailureHandler: (@MainActor () -> Void)?
 
     @Published var isListening = false
     @Published var isFinalizingRecording = false
@@ -300,6 +302,40 @@ final class CaptionViewModel: ObservableObject {
         isListening && activeTranscriptionMode == .batch
     }
 
+    func setChatLiveModeEnabled(_ isEnabled: Bool) {
+        guard isChatLiveModeEnabled != isEnabled else { return }
+        isChatLiveModeEnabled = isEnabled
+
+        guard var plan = activeTranscriptionPlan,
+              let recordingSessionId = activeRecordingSessionId else { return }
+        plan.liveChatEnabled = isEnabled
+        activeTranscriptionPlan = plan
+
+        guard case let .recording(activeSessionID) = recordingLifecycle,
+              activeSessionID == recordingSessionId else { return }
+        enqueueRecordingConfiguration { [weak self] _ in
+            guard let self,
+                  self.activeTranscriptionPlan?.liveChatEnabled == isEnabled else { return }
+            do {
+                let locale = self.resolvedSelectedLocale()
+                let snapshot = try await self.recordingSessionController.setLiveChatEnabled(
+                    isEnabled,
+                    translateSegment: self.translationHandler(for: locale)
+                )
+                self.activeControllerSources = snapshot.enabledSources
+            } catch {
+                guard self.activeTranscriptionPlan?.liveChatEnabled == isEnabled else { return }
+                self.errorMessage = error.localizedDescription
+                // A failed enable and a failed disable both converge on the privacy-safe
+                // state shared with chat sessions. The next recording must not restart
+                // recognition while every chat has live mode switched off.
+                self.isChatLiveModeEnabled = false
+                self.activeTranscriptionPlan?.liveChatEnabled = false
+                self.chatLiveModeFailureHandler?()
+            }
+        }
+    }
+
     /// 少なくとも 1 つの音声ソースが有効か。
     var hasEnabledAudioSource: Bool { isMicEnabled || isSystemAudioEnabled }
 
@@ -357,6 +393,7 @@ final class CaptionViewModel: ObservableObject {
     private var failedPersistenceService: MeetingPersistenceService?
     private var failedTranscriptionEventPipeline: TranscriptionEventPipeline?
     private var transcriptionEventPipeline: TranscriptionEventPipeline?
+    private var isChatLiveModeEnabled = false
     private var batchTranscriptionCoordinator: BatchTranscriptionCoordinator?
     private let recordingSessionController = RecordingSessionController()
     private var activeTranscriptionPlan: TranscriptionSessionPlan?
@@ -1593,6 +1630,13 @@ final class CaptionViewModel: ObservableObject {
                     self?.handleTranscriptionEvent(event)
                 }
             },
+            eventObserver: { [weak self] event in
+                guard case let .finalized(segment) = event,
+                      segment.isConfirmed else { return }
+                Task { @MainActor [weak self] in
+                    self?.forwardFinalizedLiveTranscript(segment)
+                }
+            },
             uiReloadSink: { [weak recordingTranscriptStore] in
                 guard let recordingTranscriptStore else { return }
                 _ = await recordingTranscriptStore.reloadLatestAfterUICompaction()
@@ -1734,6 +1778,7 @@ final class CaptionViewModel: ObservableObject {
         var transcriptionPlan = TranscriptionSessionPlan(
             finalMode: transcriptionMode,
             liveSubtitlesEnabled: AppSettings.shared.liveSubtitleOverlayEnabled,
+            liveChatEnabled: isChatLiveModeEnabled,
             retainBatchAudio: retainAudioAfterBatch
         )
         let primaryLocale = resolvedSelectedLocale()
@@ -2858,6 +2903,13 @@ final class CaptionViewModel: ObservableObject {
         }
     }
 
+    private func forwardFinalizedLiveTranscript(_ segment: TranscriptSegment) {
+        guard let plan = activeTranscriptionPlan,
+              plan.liveChatEnabled,
+              segment.sessionId == activeRecordingSessionId else { return }
+        finalizedLiveTranscriptHandler?(segment.text)
+    }
+
     private func controllerSourceConfiguration(
         for source: RecordingAudioSource,
         plan: TranscriptionSessionPlan? = nil
@@ -2985,14 +3037,18 @@ final class CaptionViewModel: ObservableObject {
     ) async throws -> TranscriptionSessionPlan {
         var plan = initialPlan
         while recordingLifecycle == .starting(recordingSessionId) {
-            let desiredValue = activeTranscriptionPlan?.liveSubtitlesEnabled
+            let desiredSubtitles = activeTranscriptionPlan?.liveSubtitlesEnabled
                 ?? AppSettings.shared.liveSubtitleOverlayEnabled
-            guard plan.liveSubtitlesEnabled != desiredValue else { return plan }
+            let desiredLiveChat = activeTranscriptionPlan?.liveChatEnabled ?? isChatLiveModeEnabled
+            guard plan.liveSubtitlesEnabled != desiredSubtitles ||
+                plan.liveChatEnabled != desiredLiveChat else { return plan }
 
             try ensureSessionIsActive(recordingSessionId)
-            guard activeTranscriptionPlan?.liveSubtitlesEnabled == desiredValue else { continue }
+            guard activeTranscriptionPlan?.liveSubtitlesEnabled == desiredSubtitles,
+                  activeTranscriptionPlan?.liveChatEnabled == desiredLiveChat else { continue }
 
-            plan.liveSubtitlesEnabled = desiredValue
+            plan.liveSubtitlesEnabled = desiredSubtitles
+            plan.liveChatEnabled = desiredLiveChat
             return plan
         }
         throw CancellationError()
@@ -3012,9 +3068,19 @@ final class CaptionViewModel: ObservableObject {
                     translateSegment: translationHandler(for: locale)
                 )
                 activeControllerSources = snapshot.enabledSources
-                appliedPlan = latestPlan
+                appliedPlan = snapshot.plan
             }
-            guard activeTranscriptionPlan?.liveSubtitlesEnabled == latestPlan.liveSubtitlesEnabled else {
+            if appliedPlan.liveChatEnabled != latestPlan.liveChatEnabled {
+                let locale = resolvedSelectedLocale()
+                let snapshot = try await recordingSessionController.setLiveChatEnabled(
+                    latestPlan.liveChatEnabled,
+                    translateSegment: translationHandler(for: locale)
+                )
+                activeControllerSources = snapshot.enabledSources
+                appliedPlan = snapshot.plan
+            }
+            guard activeTranscriptionPlan?.liveSubtitlesEnabled == latestPlan.liveSubtitlesEnabled,
+                  activeTranscriptionPlan?.liveChatEnabled == latestPlan.liveChatEnabled else {
                 continue
             }
             return latestPlan

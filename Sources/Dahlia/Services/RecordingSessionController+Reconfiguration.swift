@@ -23,17 +23,50 @@ extension RecordingSessionController {
             throw RecordingSessionControllerError.sessionNotActive
         }
         guard snapshot.plan.liveSubtitlesEnabled != isEnabled else { return snapshot }
+        var updatedPlan = snapshot.plan
+        updatedPlan.liveSubtitlesEnabled = isEnabled
+        return try await applyLiveRecognitionPlan(
+            updatedPlan,
+            replacing: snapshot,
+            translateSegment: translateSegment
+        )
+    }
 
-        if snapshot.plan.finalMode == .batch, isEnabled {
+    func setLiveChatEnabled(
+        _ isEnabled: Bool,
+        translateSegment: ProgressiveSegmentTranslationHandler?
+    ) async throws -> Snapshot {
+        guard case let .capturing(snapshot) = state else {
+            throw RecordingSessionControllerError.sessionNotActive
+        }
+        guard snapshot.plan.liveChatEnabled != isEnabled else { return snapshot }
+        var updatedPlan = snapshot.plan
+        updatedPlan.liveChatEnabled = isEnabled
+        return try await applyLiveRecognitionPlan(
+            updatedPlan,
+            replacing: snapshot,
+            translateSegment: translateSegment
+        )
+    }
+
+    private func applyLiveRecognitionPlan(
+        _ updatedPlan: TranscriptionSessionPlan,
+        replacing snapshot: Snapshot,
+        translateSegment: ProgressiveSegmentTranslationHandler?
+    ) async throws -> Snapshot {
+        if snapshot.plan.finalMode == .batch,
+           !snapshot.plan.requiresLiveRecognition,
+           updatedPlan.requiresLiveRecognition {
             try await enableBatchLiveRecognition(
                 snapshot: snapshot,
                 translateSegment: translateSegment
             )
-        } else if snapshot.plan.finalMode == .batch {
+        } else if snapshot.plan.finalMode == .batch,
+                  snapshot.plan.requiresLiveRecognition,
+                  !updatedPlan.requiresLiveRecognition {
             await disableBatchLiveRecognition()
         }
-
-        return try commitLiveSubtitleState(isEnabled, sessionId: snapshot.sessionId)
+        return try commitLiveRecognitionPlan(updatedPlan, sessionId: snapshot.sessionId)
     }
 
     private func enableBatchLiveRecognition(
@@ -161,12 +194,15 @@ extension RecordingSessionController {
         }
     }
 
-    private func commitLiveSubtitleState(_ isEnabled: Bool, sessionId: UUID) throws -> Snapshot {
+    private func commitLiveRecognitionPlan(
+        _ plan: TranscriptionSessionPlan,
+        sessionId: UUID
+    ) throws -> Snapshot {
         guard case var .capturing(snapshot) = state,
               snapshot.sessionId == sessionId else {
             throw RecordingSessionControllerError.sessionNotActive
         }
-        snapshot.plan.liveSubtitlesEnabled = isEnabled
+        snapshot.plan = plan
         transition(to: .capturing(snapshot))
         return snapshot
     }

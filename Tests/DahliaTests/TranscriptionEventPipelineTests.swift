@@ -1,11 +1,50 @@
 #if canImport(Testing)
     // swiftlint:disable file_length
     import Foundation
+    import os
     import Testing
     @testable import Dahlia
 
     // swiftlint:disable:next type_body_length
     struct TranscriptionEventPipelineTests {
+        @Test
+        func eventObserverReceivesEveryFinalizedEventWhenUILaneCompacts() async throws {
+            let uiGate = AsyncTestGate()
+            let uiEvents = TranscriptionEventProbe()
+            let observedFinalizedCount = OSAllocatedUnfairLock(initialState: 0)
+            let pipeline = TranscriptionEventPipeline(
+                uiSink: { events in
+                    await uiEvents.append(contentsOf: events)
+                    await uiGate.wait()
+                },
+                eventObserver: { event in
+                    guard case let .finalized(segment) = event, segment.isConfirmed else { return }
+                    observedFinalizedCount.withLock { $0 += 1 }
+                },
+                persistenceSink: { _ in }
+            )
+
+            await pipeline.start()
+            await pipeline.enqueue(.failure(
+                sessionId: .v7(),
+                pipelineID: .v7(),
+                sourceLabel: "mic",
+                message: "block UI"
+            ))
+            await uiEvents.waitForCount(1)
+            for index in 0 ..< 1000 {
+                await pipeline.enqueue(.finalized(TranscriptSegment(
+                    startTime: Date(timeIntervalSince1970: Double(index)),
+                    text: "final-\(index)",
+                    isConfirmed: true
+                )))
+            }
+
+            #expect(observedFinalizedCount.withLock { $0 } == 1000)
+            await uiGate.open()
+            try await pipeline.finish()
+        }
+
         @Test
         func persistenceContinuesWhileUISinkIsSuspended() async throws {
             let uiGate = AsyncTestGate()
@@ -137,7 +176,7 @@
             await pipeline.start()
             await pipeline.enqueue(blockingEvent)
             await uiEvents.waitForCount(1)
-            for index in 0 ..< 1_000 {
+            for index in 0 ..< 1000 {
                 await pipeline.enqueue(.previewTranslation(
                     sessionId: sessionID,
                     segmentID: segmentID,
@@ -279,7 +318,7 @@
             await pipeline.start()
             await pipeline.enqueue(blockingEvent)
             await uiEvents.waitForCount(1)
-            for index in 0 ..< 1_000 {
+            for index in 0 ..< 1000 {
                 if index == 100 {
                     await pipeline.enqueue(retainedFailure)
                 }
@@ -302,7 +341,7 @@
             #expect(await reloads.value() > 0)
             #expect(await uiEvents.snapshot().contains(retainedFailure))
             #expect(await uiEvents.snapshot().count <= TranscriptionEventPipeline.maximumPendingUIEventCount + 2)
-            #expect(await persistedEvents.snapshot().count == 1_000)
+            #expect(await persistedEvents.snapshot().count == 1000)
             let operationValues = await operations.snapshot()
             let persistedIndex = try #require(operationValues.firstIndex(of: "persisted"))
             let reloadIndex = try #require(operationValues.firstIndex(of: "reload"))
@@ -337,7 +376,7 @@
                 message: "block UI"
             ))
             await uiEvents.waitForCount(1)
-            for index in 0 ..< 1_000 {
+            for index in 0 ..< 1000 {
                 await pipeline.enqueue(.finalized(TranscriptSegment(
                     startTime: Date(timeIntervalSince1970: Double(index)),
                     text: "final-\(index)",

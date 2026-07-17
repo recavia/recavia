@@ -164,6 +164,27 @@ import Foundation
             #expect(contexts.map { $0?.meetingName } == ["First draft", "Second draft", "History draft"])
         }
 
+        @Test
+        func liveModeStatusRemainsEnabledUntilTheLastSessionTurnsItOff() throws {
+            let settings = AppSettings()
+            settings.currentVault = Self.vault(name: "Live")
+            let coordinator = CodexChatCoordinator(
+                service: CoordinatorTestCodexChatService(),
+                settings: settings
+            )
+            let detachedID = coordinator.newDetachedChat()
+            let detachedSession = try #require(coordinator.session(for: detachedID))
+            var statuses: [Bool] = []
+            coordinator.liveModeStatusDidChange = { statuses.append($0) }
+
+            coordinator.floatingSession.toggleLiveMode()
+            detachedSession.toggleLiveMode()
+            coordinator.floatingSession.toggleLiveMode()
+            detachedSession.toggleLiveMode()
+
+            #expect(statuses == [true, true, true, false])
+        }
+
         private static func threadSummary(id: String) -> CodexChatThreadSummary {
             CodexChatThreadSummary(id: id, title: "History", updatedAt: .now)
         }

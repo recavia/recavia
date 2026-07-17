@@ -1414,6 +1414,15 @@ enum L10n {
     static var stopGenerating: String { String(localized: "Stop generating", bundle: bundle) }
     static var chatThinking: String { String(localized: "Thinking", bundle: bundle) }
     static var messageCodex: String { String(localized: "Message Codex", bundle: bundle) }
+    static var chatLiveMode: String { String(localized: "Live mode", bundle: bundle) }
+    static var enableChatLiveMode: String { String(localized: "Turn on live mode", bundle: bundle) }
+    static var disableChatLiveMode: String { String(localized: "Turn off live mode", bundle: bundle) }
+    static var chatLiveModeOn: String { String(localized: "Live mode on", bundle: bundle) }
+    static var chatLiveModeOff: String { String(localized: "Live mode off", bundle: bundle) }
+    static var chatLiveTranscriptBacklogTruncated: String {
+        String(localized: "Some older live transcript was skipped because the chat backlog was too large.", bundle: bundle)
+    }
+
     static var openAISettings: String { String(localized: "Open AI Connection Settings", bundle: bundle) }
     static var chatModelLoading: String { String(localized: "Loading models…", bundle: bundle) }
     static var chatWindowUnavailable: String { String(localized: "This chat is no longer available.", bundle: bundle) }

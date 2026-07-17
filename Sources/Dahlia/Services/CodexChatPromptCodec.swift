@@ -6,6 +6,10 @@ enum CodexChatPromptCodec {
     private static let contextClosingTag = "</context>"
     private static let meetingDescription = "  You are viewing a meeting in the Dahlia App.\n"
     private static let meetingDraftDescription = "  You are viewing an unsaved meeting draft in the Dahlia App.\n"
+    private static let liveModeDescription = "  Live mode is enabled. You are receiving finalized live transcription from Dahlia."
+    private static let hiddenLiveTranscriptDescription = "  This turn contains one hidden live transcript block."
+    private static let liveTranscriptStart = "<live_transcript>"
+    private static let liveTranscriptEnd = "</live_transcript>"
 
     static func encode(text: String, context: CodexChatContext?) -> String {
         guard let context else { return text }
@@ -17,8 +21,45 @@ enum CodexChatPromptCodec {
         return [encodeContext(context), text]
     }
 
+    static func encodeTextBlocks(
+        text: String?,
+        context: CodexChatContext?,
+        isLiveMode: Bool,
+        liveTranscript: String? = nil
+    ) -> [String] {
+        var blocks: [String] = []
+        if context != nil || isLiveMode {
+            blocks.append(encodeContext(
+                context,
+                isLiveMode: isLiveMode,
+                containsLiveTranscript: liveTranscript?.nilIfBlank != nil
+            ))
+        }
+        if let liveTranscript = liveTranscript?.nilIfBlank {
+            blocks.append(liveTranscriptBlock(liveTranscript))
+        }
+        if let text = text?.nilIfBlank {
+            blocks.append(text)
+        }
+        return blocks
+    }
+
     private static func encodeContext(_ context: CodexChatContext) -> String {
+        encodeContext(context, isLiveMode: false)
+    }
+
+    private static func encodeContext(
+        _ context: CodexChatContext?,
+        isLiveMode: Bool,
+        containsLiveTranscript: Bool = false
+    ) -> String {
         var lines = ["<context>"]
+        if isLiveMode {
+            lines.append(liveModeDescription)
+        }
+        if containsLiveTranscript {
+            lines.append(hiddenLiveTranscriptDescription)
+        }
         switch context {
         case let .meeting(id, name, calendarEvent):
             lines.append("  You are viewing a meeting in the Dahlia App.")
@@ -31,6 +72,8 @@ enum CodexChatPromptCodec {
             lines.append("  Type: MeetingDraft")
             lines.append(element(name: "meeting_name", value: name, indentation: 2))
             append(calendarEvent, to: &lines)
+        case nil:
+            break
         }
         lines.append("</context>")
         return lines.joined(separator: "\n")
@@ -54,6 +97,9 @@ enum CodexChatPromptCodec {
 
     static func decodeTextBlocks(_ textBlocks: [String]) -> (text: String, context: CodexChatContext?) {
         guard let firstText = textBlocks.first else { return ("", nil) }
+        if let decoded = decodeLiveModeTextBlocks(textBlocks) {
+            return decoded
+        }
         if textBlocks.count == 2,
            let context = canonicalContext(from: firstText) {
             return (textBlocks[1], context)
@@ -63,6 +109,40 @@ enum CodexChatPromptCodec {
 
     static func visibleUserText(from text: String) -> String {
         decodeUserText(text).text
+    }
+
+    private static func decodeLiveModeTextBlocks(
+        _ textBlocks: [String]
+    ) -> (text: String, context: CodexChatContext?)? {
+        guard let first = textBlocks.first,
+              first.hasPrefix("<context>\n" + liveModeDescription + "\n"),
+              first.hasSuffix("\n</context>") else { return nil }
+
+        let containsLiveTranscript = first.contains("\n" + hiddenLiveTranscriptDescription + "\n")
+        var contextBlock = first.replacing(liveModeDescription + "\n", with: "")
+        contextBlock = contextBlock.replacing(hiddenLiveTranscriptDescription + "\n", with: "")
+        let context = contextBlock == "<context>\n</context>" ? nil : canonicalContext(from: contextBlock)
+        guard context != nil || contextBlock == "<context>\n</context>" else { return nil }
+
+        var visibleBlocks = Array(textBlocks.dropFirst())
+        if containsLiveTranscript,
+           let firstVisible = visibleBlocks.first,
+           isCanonicalLiveTranscriptBlock(firstVisible) {
+            visibleBlocks.removeFirst()
+        }
+        return (visibleBlocks.joined(separator: "\n"), context)
+    }
+
+    private static func liveTranscriptBlock(_ text: String) -> String {
+        liveTranscriptStart + escape(text) + liveTranscriptEnd
+    }
+
+    private static func isCanonicalLiveTranscriptBlock(_ block: String) -> Bool {
+        guard block.hasPrefix(liveTranscriptStart), block.hasSuffix(liveTranscriptEnd) else { return false }
+        let valueStart = block.index(block.startIndex, offsetBy: liveTranscriptStart.count)
+        let valueEnd = block.index(block.endIndex, offsetBy: -liveTranscriptEnd.count)
+        let encoded = String(block[valueStart ..< valueEnd])
+        return unescape(encoded).map(liveTranscriptBlock) == block
     }
 
     private static func decodeUserText(_ text: String) -> (text: String, context: CodexChatContext?) {

@@ -18,6 +18,7 @@ final class CodexChatCoordinator {
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let contextProvider: CodexChatContextProvider
     @ObservationIgnored private var historyGeneration = 0
+    @ObservationIgnored var liveModeStatusDidChange: (@MainActor (Bool) -> Void)?
 
     init(
         service: any CodexChatServicing = CodexChatService.shared,
@@ -34,6 +35,7 @@ final class CodexChatCoordinator {
         )
         floatingSessionID = session.id
         sessions[session.id] = session
+        configureLiveModeHandler(for: session)
     }
 
     var floatingSession: CodexChatSessionModel {
@@ -175,6 +177,18 @@ final class CodexChatCoordinator {
         )
     }
 
+    func receiveFinalizedLiveTranscript(_ text: String) {
+        for session in sessions.values where session.isLiveModeEnabled {
+            session.receiveFinalizedLiveTranscript(text)
+        }
+    }
+
+    func disableLiveMode() {
+        for session in sessions.values where session.isLiveModeEnabled {
+            session.disableLiveMode()
+        }
+    }
+
     func refreshHistory() async {
         historyGeneration += 1
         let generation = historyGeneration
@@ -219,7 +233,11 @@ final class CodexChatCoordinator {
               !detachedSessionIDs.contains(id),
               let session = sessions.removeValue(forKey: id)
         else { return }
+        let wasLive = session.isLiveModeEnabled
         session.release()
+        if wasLive {
+            notifyLiveModeStatusChanged()
+        }
     }
 
     private func replaceFloatingSession(
@@ -239,7 +257,7 @@ final class CodexChatCoordinator {
         backendThreadID: String? = nil,
         title: String = ""
     ) -> CodexChatSessionModel {
-        CodexChatSessionModel(
+        let session = CodexChatSessionModel(
             id: id,
             vaultID: vaultID,
             backendThreadID: backendThreadID,
@@ -248,5 +266,17 @@ final class CodexChatCoordinator {
             settings: settings,
             contextProvider: contextProvider
         )
+        configureLiveModeHandler(for: session)
+        return session
+    }
+
+    private func configureLiveModeHandler(for session: CodexChatSessionModel) {
+        session.setLiveModeChangeHandler { [weak self] _ in
+            self?.notifyLiveModeStatusChanged()
+        }
+    }
+
+    private func notifyLiveModeStatusChanged() {
+        liveModeStatusDidChange?(sessions.values.contains(where: \.isLiveModeEnabled))
     }
 }

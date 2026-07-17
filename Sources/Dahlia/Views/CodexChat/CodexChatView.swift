@@ -59,7 +59,7 @@ struct CodexChatView: View {
             if let errorMessage = session.errorMessage {
                 CodexChatErrorView(
                     message: errorMessage,
-                    onRetry: session.lastSubmittedText == nil ? retryConnection : session.retry
+                    onRetry: session.hasRetryableSubmission ? session.retry : retryConnection
                 )
             } else if let historyError = coordinator.historyError {
                 CodexChatErrorView(

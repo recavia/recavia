@@ -3,11 +3,12 @@
 struct TranscriptionSessionPlan: Equatable {
     let finalMode: TranscriptionMode
     var liveSubtitlesEnabled: Bool
+    var liveChatEnabled = false
     let retainBatchAudio: Bool
 
-    /// 正本文字起こし、またはライブ字幕のために逐次認識が必要か。
+    /// 正本文字起こし、ライブ字幕、またはライブチャットのために逐次認識が必要か。
     var requiresLiveRecognition: Bool {
-        finalMode == .realtime || liveSubtitlesEnabled
+        finalMode == .realtime || liveSubtitlesEnabled || liveChatEnabled
     }
 
     /// バッチ文字起こし用の音声を録音するか。

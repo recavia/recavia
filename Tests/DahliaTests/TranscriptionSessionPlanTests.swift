@@ -71,5 +71,20 @@
             #expect(plan.recordsBatchAudio)
             #expect(plan.retainBatchAudio)
         }
+
+        @Test
+        func liveChatRequiresRecognitionWithoutPersistingRealtimeTranscript() {
+            let plan = TranscriptionSessionPlan(
+                finalMode: .batch,
+                liveSubtitlesEnabled: false,
+                liveChatEnabled: true,
+                retainBatchAudio: true
+            )
+
+            #expect(plan.requiresLiveRecognition)
+            #expect(plan.liveRecognizerCountPerSource == 1)
+            #expect(plan.recordsBatchAudio)
+            #expect(!plan.persistsRealtimeTranscript)
+        }
     }
 #endif

@@ -115,6 +115,28 @@
         }
 
         @Test
+        func liveChatKeepsBatchRecognizerWhenSubtitlesAreDisabled() async throws {
+            let runtime = try await makeRuntime(mode: .batch, liveSubtitlesEnabled: false)
+
+            var snapshot = try await runtime.controller.setLiveChatEnabled(true, translateSegment: nil)
+            #expect(snapshot.plan.liveChatEnabled)
+            #expect(await runtime.controller.resourceCounts().recognizers == 2)
+
+            snapshot = try await runtime.controller.setLiveSubtitlesEnabled(true, translateSegment: nil)
+            snapshot = try await runtime.controller.setLiveSubtitlesEnabled(false, translateSegment: nil)
+            #expect(snapshot.plan.liveChatEnabled)
+            #expect(!snapshot.plan.liveSubtitlesEnabled)
+            #expect(await runtime.controller.resourceCounts().recognizers == 2)
+
+            snapshot = try await runtime.controller.setLiveChatEnabled(false, translateSegment: nil)
+            #expect(!snapshot.plan.requiresLiveRecognition)
+            #expect(await runtime.controller.resourceCounts().recognizers == 0)
+
+            _ = try await runtime.controller.stop()
+            await runtime.controller.completeStop()
+        }
+
+        @Test
         func failedBatchLiveToggleDoesNotCommitEnabledPlan() async throws {
             let runtime = try await makeRuntime(
                 mode: .batch,

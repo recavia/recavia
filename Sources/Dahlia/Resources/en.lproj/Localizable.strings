@@ -712,6 +712,12 @@
 "Stop generating" = "Stop generating";
 "Thinking" = "Thinking";
 "Message Codex" = "Message Codex";
+"Live mode" = "Live mode";
+"Turn on live mode" = "Turn on live mode";
+"Turn off live mode" = "Turn off live mode";
+"Live mode on" = "Live mode on";
+"Live mode off" = "Live mode off";
+"Some older live transcript was skipped because the chat backlog was too large." = "Some older live transcript was skipped because the chat backlog was too large.";
 "Open AI Connection Settings" = "Open AI Connection Settings";
 "Loading models…" = "Loading models…";
 "This chat is no longer available." = "This chat is no longer available.";

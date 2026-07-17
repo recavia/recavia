@@ -6,6 +6,57 @@ import Foundation
 
     struct CodexChatPromptCodecTests {
         @Test
+        func liveModeWrapsTranscriptAndKeepsItOutOfVisibleUserText() {
+            let blocks = CodexChatPromptCodec.encodeTextBlocks(
+                text: nil,
+                context: nil,
+                isLiveMode: true,
+                liveTranscript: "Speaker & <guest>\nNext line"
+            )
+
+            #expect(blocks == [
+                """
+                <context>
+                  Live mode is enabled. You are receiving finalized live transcription from Dahlia.
+                  This turn contains one hidden live transcript block.
+                </context>
+                """,
+                "<live_transcript>Speaker &amp; &lt;guest&gt;&#10;Next line</live_transcript>",
+            ])
+            let decoded = CodexChatPromptCodec.decodeTextBlocks(blocks)
+            #expect(decoded.text.isEmpty)
+            #expect(decoded.context == nil)
+        }
+
+        @Test
+        func manualCanonicalLiveTranscriptTagRemainsVisible() {
+            let manualText = "<live_transcript>keep this visible</live_transcript>"
+            let blocks = CodexChatPromptCodec.encodeTextBlocks(
+                text: manualText,
+                context: nil,
+                isLiveMode: true
+            )
+
+            let decoded = CodexChatPromptCodec.decodeTextBlocks(blocks)
+
+            #expect(decoded.text == manualText)
+            #expect(decoded.context == nil)
+        }
+
+        @Test
+        func manualMessageRemainsVisibleWhileLiveModeIsEnabled() {
+            let blocks = CodexChatPromptCodec.encodeTextBlocks(
+                text: "Please summarize that",
+                context: nil,
+                isLiveMode: true
+            )
+
+            let decoded = CodexChatPromptCodec.decodeTextBlocks(blocks)
+            #expect(decoded.text == "Please summarize that")
+            #expect(decoded.context == nil)
+        }
+
+        @Test
         func meetingContextRoundTripsWithEscapedCalendarMetadata() throws {
             let meetingID = try #require(UUID(uuidString: "01234567-89AB-CDEF-0123-456789ABCDEF"))
             let start = Date(timeIntervalSince1970: 1_704_067_200.125)

@@ -7,6 +7,7 @@ import Foundation
 /// preview は音源ごとに最新値だけを保持する。UI backlog は上限超過時に DB 再読込へ集約する。
 actor TranscriptionEventPipeline { // swiftlint:disable:this type_body_length
     typealias UISink = @MainActor @Sendable ([TranscriptionEvent]) async -> Void
+    typealias EventObserver = @Sendable (TranscriptionEvent) -> Void
     typealias UIReloadSink = @MainActor @Sendable () async -> Void
     typealias PersistenceSink = @Sendable ([TranscriptionEvent]) async throws -> Void
     typealias PersistenceFlushSink = @Sendable () async throws -> Void
@@ -49,6 +50,7 @@ actor TranscriptionEventPipeline { // swiftlint:disable:this type_body_length
     }
 
     private let uiSink: UISink
+    private let eventObserver: EventObserver?
     private let uiReloadSink: UIReloadSink
     private let persistenceSink: PersistenceSink
     private let persistenceFlushSink: PersistenceFlushSink
@@ -86,6 +88,7 @@ actor TranscriptionEventPipeline { // swiftlint:disable:this type_body_length
 
     init(
         uiSink: @escaping UISink,
+        eventObserver: EventObserver? = nil,
         uiReloadSink: @escaping UIReloadSink = {},
         persistenceSink: @escaping PersistenceSink,
         persistenceFlushSink: @escaping PersistenceFlushSink = {},
@@ -100,6 +103,7 @@ actor TranscriptionEventPipeline { // swiftlint:disable:this type_body_length
             bufferingPolicy: .unbounded
         )
         self.uiSink = uiSink
+        self.eventObserver = eventObserver
         self.uiReloadSink = uiReloadSink
         self.persistenceSink = persistenceSink
         self.persistenceFlushSink = persistenceFlushSink
@@ -138,6 +142,9 @@ actor TranscriptionEventPipeline { // swiftlint:disable:this type_body_length
     func enqueue(_ event: TranscriptionEvent) {
         guard isAcceptingEvents else { return }
 
+        // Observers that require every event must run before the bounded UI projection
+        // compacts finalized events into a reload marker.
+        eventObserver?(event)
         enqueueUIEvent(event)
         uiSignalContinuation.yield()
 
