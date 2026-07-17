@@ -1,9 +1,9 @@
 .build/
 .swiftpm/
 *.app
-Dahlia.zip
-Dahlia.dmg
-Dahlia-*.dmg
+Recavia.zip
+Recavia.dmg
+Recavia-*.dmg
 DerivedData/
 .DS_Store
 .env.local

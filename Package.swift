@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "Dahlia",
+    name: "Recavia",
     defaultLocalization: "ja",
     platforms: [
         .macOS(.v26)
     ],
     products: [
-        .executable(name: "Dahlia", targets: ["Dahlia"]),
-        .executable(name: "dahlia-mcp", targets: ["DahliaMCP"]),
+        .executable(name: "Recavia", targets: ["Recavia"]),
+        .executable(name: "recavia-mcp", targets: ["RecaviaMCP"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
@@ -17,30 +17,30 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "DahliaRuntimeSupport",
-            path: "Sources/DahliaRuntimeSupport"
+            name: "RecaviaRuntimeSupport",
+            path: "Sources/RecaviaRuntimeSupport"
         ),
         .target(
-            name: "DahliaMeetingAccess",
+            name: "RecaviaMeetingAccess",
             dependencies: [
-                "DahliaRuntimeSupport",
+                "RecaviaRuntimeSupport",
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],
-            path: "Sources/DahliaMeetingAccess"
+            path: "Sources/RecaviaMeetingAccess"
         ),
         .executableTarget(
-            name: "DahliaMCP",
-            dependencies: ["DahliaMeetingAccess"],
-            path: "Sources/DahliaMCP"
+            name: "RecaviaMCP",
+            dependencies: ["RecaviaMeetingAccess"],
+            path: "Sources/RecaviaMCP"
         ),
         .executableTarget(
-            name: "Dahlia",
+            name: "Recavia",
             dependencies: [
-                "DahliaRuntimeSupport",
+                "RecaviaRuntimeSupport",
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "Sentry", package: "sentry-cocoa"),
             ],
-            path: "Sources/Dahlia",
+            path: "Sources/Recavia",
             exclude: [
                 "AGENTS.md",
                 "CLAUDE.md",
@@ -50,9 +50,9 @@ let package = Package(
             resources: [.process("Resources")]
         ),
         .testTarget(
-            name: "DahliaTests",
-            dependencies: ["Dahlia", "DahliaMeetingAccess", "DahliaRuntimeSupport"],
-            path: "Tests/DahliaTests",
+            name: "RecaviaTests",
+            dependencies: ["Recavia", "RecaviaMeetingAccess", "RecaviaRuntimeSupport"],
+            path: "Tests/RecaviaTests",
             exclude: [
                 "AGENTS.md",
                 "CLAUDE.md",
