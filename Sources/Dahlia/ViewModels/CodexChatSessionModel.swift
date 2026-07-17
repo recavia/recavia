@@ -209,24 +209,10 @@ private extension CodexChatSessionModel {
             }
             try Task.checkCancellation()
             try ensureLiveTurnCanContinue(liveTranscript)
-            if backendThreadID == nil {
-                guard isBoundToCurrentVault, let vaultID else {
-                    throw CodexAppServerError.invalidProtocolResponse
-                }
-                let thread = try await service.startThread(
-                    model: selectedModelID.nilIfBlank,
-                    effort: selectedEffort,
-                    vaultID: vaultID
-                )
-                apply(thread, preservingPendingMessages: true)
-                let threadTitle = liveTranscript == nil ? text ?? L10n.newChat : L10n.chatLiveMode
-                title = threadTitle
-                await service.setThreadName(threadID: thread.id, name: threadTitle)
-                try ensureLiveTurnCanContinue(liveTranscript)
-            }
-            guard let backendThreadID else {
-                throw CodexAppServerError.invalidProtocolResponse
-            }
+            let backendThreadID = try await ensureBackendThread(
+                text: text,
+                liveTranscript: liveTranscript
+            )
             try ensureLiveTurnCanContinue(liveTranscript)
 
             let stream = try await service.send(
@@ -391,6 +377,26 @@ private extension CodexChatSessionModel {
 
     private static let maximumEventsBetweenYields = 64
 
+    func ensureBackendThread(text: String?, liveTranscript: String?) async throws -> String {
+        if let backendThreadID {
+            return backendThreadID
+        }
+        guard isBoundToCurrentVault, let vaultID else {
+            throw CodexAppServerError.invalidProtocolResponse
+        }
+        let thread = try await service.startThread(
+            model: selectedModelID.nilIfBlank,
+            effort: selectedEffort,
+            vaultID: vaultID
+        )
+        apply(thread, preservingPendingMessages: true)
+        let threadTitle = liveTranscript == nil ? text ?? L10n.newChat : L10n.chatLiveMode
+        title = threadTitle
+        await service.setThreadName(threadID: thread.id, name: threadTitle)
+        try ensureLiveTurnCanContinue(liveTranscript)
+        return thread.id
+    }
+
     func ensureLiveTurnCanContinue(_ liveTranscript: String?) throws {
         guard liveTranscript != nil else { return }
         guard isLiveModeEnabled, !isStopRequested else { throw CancellationError() }
@@ -545,9 +551,7 @@ private extension CodexChatSessionModel {
     }
 
     func appendPendingLiveTranscript(_ text: String) {
-        let combined = [pendingLiveTranscript, text]
-            .compactMap { $0?.nilIfBlank }
-            .joined(separator: "\n")
+        let combined = pendingLiveTranscript.map { $0 + "\n" + text } ?? text
         guard combined.count > Self.maximumPendingLiveTranscriptCharacters else {
             pendingLiveTranscript = combined
             return

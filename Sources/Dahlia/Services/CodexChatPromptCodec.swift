@@ -27,15 +27,16 @@ enum CodexChatPromptCodec {
         isLiveMode: Bool,
         liveTranscript: String? = nil
     ) -> [String] {
+        let liveTranscript = liveTranscript?.nilIfBlank
         var blocks: [String] = []
         if context != nil || isLiveMode {
             blocks.append(encodeContext(
                 context,
                 isLiveMode: isLiveMode,
-                containsLiveTranscript: liveTranscript?.nilIfBlank != nil
+                containsLiveTranscript: liveTranscript != nil
             ))
         }
-        if let liveTranscript = liveTranscript?.nilIfBlank {
+        if let liveTranscript {
             blocks.append(liveTranscriptBlock(liveTranscript))
         }
         if let text = text?.nilIfBlank {

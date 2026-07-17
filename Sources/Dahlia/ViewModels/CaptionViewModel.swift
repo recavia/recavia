@@ -326,9 +326,6 @@ final class CaptionViewModel: ObservableObject {
             } catch {
                 guard self.activeTranscriptionPlan?.liveChatEnabled == isEnabled else { return }
                 self.errorMessage = error.localizedDescription
-                // A failed enable and a failed disable both converge on the privacy-safe
-                // state shared with chat sessions. The next recording must not restart
-                // recognition while every chat has live mode switched off.
                 self.isChatLiveModeEnabled = false
                 self.activeTranscriptionPlan?.liveChatEnabled = false
                 self.chatLiveModeFailureHandler?()
