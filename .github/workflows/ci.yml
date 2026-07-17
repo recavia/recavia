@@ -36,10 +36,7 @@ jobs:
       - name: Cache BuildTools
         uses: actions/cache@v5
         with:
-          path: |
-            BuildTools/.build/checkouts
-            BuildTools/.build/workspace-state.json
-            BuildTools/.build/*-apple-macosx/release
+          path: BuildTools/.build
           key: buildtools-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('BuildTools/Package.resolved') }}
 
       - name: Install lint tools
@@ -68,10 +65,7 @@ jobs:
         id: app-build-cache
         uses: actions/cache/restore@v5
         with:
-          path: |
-            .build/checkouts
-            .build/workspace-state.json
-            .build/*-apple-macosx/debug
+          path: .build
           key: app-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
 
       - name: Run unit tests
@@ -89,8 +83,5 @@ jobs:
         if: ${{ !cancelled() && steps.app-build-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v5
         with:
-          path: |
-            .build/checkouts
-            .build/workspace-state.json
-            .build/*-apple-macosx/debug
+          path: .build
           key: ${{ steps.app-build-cache.outputs.cache-primary-key }}
