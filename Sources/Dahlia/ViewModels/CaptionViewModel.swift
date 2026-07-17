@@ -5,6 +5,7 @@ import AppKit
 import Combine
 import CoreAudio
 import CoreMedia
+import DahliaRuntimeSupport
 import GRDB
 import os
 @preconcurrency import ScreenCaptureKit
