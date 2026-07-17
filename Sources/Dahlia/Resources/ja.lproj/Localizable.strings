@@ -709,6 +709,7 @@
 "Hide chat" = "チャットを隠す";
 "Send message" = "メッセージを送信";
 "Stop generating" = "生成を停止";
+"Thinking" = "考えています";
 "Message Codex" = "Codex にメッセージ";
 "Open AI Connection Settings" = "AI 接続設定を開く";
 "Loading models…" = "モデルを読み込み中…";
