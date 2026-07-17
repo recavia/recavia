@@ -182,8 +182,7 @@ public final class DahliaMCPServer {
         }
 
         if let screenshotIDs {
-            guard from == nil, to == nil,
-                  arguments["limit"] == nil, arguments["cursor"] == nil else {
+            guard arguments["limit"] == nil, arguments["cursor"] == nil else {
                 throw ParameterError("screenshot_ids cannot be combined with range or pagination parameters")
             }
             let images = try store.screenshotImages(meetingID: meetingID, screenshotIDs: screenshotIDs)
@@ -202,7 +201,7 @@ public final class DahliaMCPServer {
         try validateTimeRange(from: from, to: to)
         let limit = try integer(arguments, key: "limit") ?? 1
         guard (1 ... 10).contains(limit) else { throw ParameterError("limit must be between 1 and 10") }
-        var page = try store.screenshots(
+        let page = try store.screenshots(
             meetingID: meetingID,
             query: ScreenshotQuery(
                 fromElapsedSeconds: from,
@@ -216,13 +215,15 @@ public final class DahliaMCPServer {
         } else {
             try store.screenshotImages(meetingID: meetingID, screenshotIDs: page.screenshots.map(\.id))
         }
-        page = MeetingScreenshotPage(
-            vault: page.vault,
-            meetingID: page.meetingID,
-            screenshots: images.map(Self.deliveredMetadata),
-            nextCursor: page.nextCursor
+        return (
+            MeetingScreenshotPage(
+                vault: page.vault,
+                meetingID: page.meetingID,
+                screenshots: images.map(Self.deliveredMetadata),
+                nextCursor: page.nextCursor
+            ),
+            images
         )
-        return (page, images)
     }
 
     private func authorizedMeetingID(_ arguments: [String: Any]) throws -> UUID {

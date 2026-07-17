@@ -227,12 +227,7 @@ public final class MeetingAccessStore: Sendable {
                     meetings.createdAt AS meetingCreatedAt,
                     sessions.startedAt AS sessionStartedAt,
                     sessions.offsetSeconds AS sessionOffsetSeconds,
-                    MAX(0, ROUND(CASE
-                        WHEN sessions.startedAt IS NOT NULL AND sessions.offsetSeconds IS NOT NULL
-                        THEN sessions.offsetSeconds
-                            + (julianday(segments.startTime) - julianday(sessions.startedAt)) * 86400.0
-                        ELSE (julianday(segments.startTime) - julianday(meetings.createdAt)) * 86400.0
-                    END, 3)) AS elapsedSeconds
+                    \(Self.elapsedSecondsSQL(timestampColumn: "segments.startTime")) AS elapsedSeconds
                 FROM transcript_segments AS segments
                 JOIN meetings ON meetings.id = segments.meetingId
                 LEFT JOIN recording_sessions AS sessions
@@ -287,6 +282,17 @@ public final class MeetingAccessStore: Sendable {
             date.timeIntervalSince(meetingCreatedAt)
         }
         return max(0, elapsed)
+    }
+
+    private static func elapsedSecondsSQL(timestampColumn: String) -> String {
+        """
+        MAX(0, ROUND(CASE
+            WHEN sessions.startedAt IS NOT NULL AND sessions.offsetSeconds IS NOT NULL
+            THEN sessions.offsetSeconds
+                + (julianday(\(timestampColumn)) - julianday(sessions.startedAt)) * 86400.0
+            ELSE (julianday(\(timestampColumn)) - julianday(meetings.createdAt)) * 86400.0
+        END, 3))
+        """
     }
 
     private static func timestamp(elapsedSeconds: Double) -> String {
@@ -429,15 +435,7 @@ extension MeetingAccessStore {
                     screenshots.id,
                     screenshots.capturedAt,
                     screenshots.mimeType,
-                    meetings.createdAt AS meetingCreatedAt,
-                    sessions.startedAt AS sessionStartedAt,
-                    sessions.offsetSeconds AS sessionOffsetSeconds,
-                    MAX(0, ROUND(CASE
-                        WHEN sessions.startedAt IS NOT NULL AND sessions.offsetSeconds IS NOT NULL
-                        THEN sessions.offsetSeconds
-                            + (julianday(screenshots.capturedAt) - julianday(sessions.startedAt)) * 86400.0
-                        ELSE (julianday(screenshots.capturedAt) - julianday(meetings.createdAt)) * 86400.0
-                    END, 3)) AS elapsedSeconds
+                    \(Self.elapsedSecondsSQL(timestampColumn: "screenshots.capturedAt")) AS elapsedSeconds
                 FROM screenshots
                 JOIN meetings ON meetings.id = screenshots.meetingId
                 LEFT JOIN recording_sessions AS sessions
@@ -466,15 +464,7 @@ extension MeetingAccessStore {
                 screenshots.capturedAt,
                 screenshots.mimeType,
                 screenshots.imageData,
-                meetings.createdAt AS meetingCreatedAt,
-                sessions.startedAt AS sessionStartedAt,
-                sessions.offsetSeconds AS sessionOffsetSeconds,
-                MAX(0, ROUND(CASE
-                    WHEN sessions.startedAt IS NOT NULL AND sessions.offsetSeconds IS NOT NULL
-                    THEN sessions.offsetSeconds
-                        + (julianday(screenshots.capturedAt) - julianday(sessions.startedAt)) * 86400.0
-                    ELSE (julianday(screenshots.capturedAt) - julianday(meetings.createdAt)) * 86400.0
-                END, 3)) AS elapsedSeconds
+                \(Self.elapsedSecondsSQL(timestampColumn: "screenshots.capturedAt")) AS elapsedSeconds
             FROM screenshots
             JOIN meetings ON meetings.id = screenshots.meetingId
             LEFT JOIN recording_sessions AS sessions
@@ -489,15 +479,7 @@ extension MeetingAccessStore {
 
     private static func screenshotMetadata(from row: Row, referencedIDs: Set<UUID>) -> MeetingScreenshotMetadata {
         let capturedAt: Date = row["capturedAt"]
-        let meetingCreatedAt: Date = row["meetingCreatedAt"]
-        let elapsed: Double = row.hasColumn("elapsedSeconds")
-            ? row["elapsedSeconds"]
-            : elapsedSeconds(
-                at: capturedAt,
-                meetingCreatedAt: meetingCreatedAt,
-                sessionStartedAt: row["sessionStartedAt"],
-                sessionOffsetSeconds: row["sessionOffsetSeconds"]
-            ) ?? 0
+        let elapsed: Double = row["elapsedSeconds"]
         let id: UUID = row["id"]
         return MeetingScreenshotMetadata(
             id: id,
