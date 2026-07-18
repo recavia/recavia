@@ -205,6 +205,22 @@ actor CodexChatService: CodexChatServicing {
         )
     }
 
+    func steer(threadID: String, turnID: String, textBlocks: [String]) async throws {
+        _ = try await appServer.request(
+            method: "turn/steer",
+            params: .object([
+                "expectedTurnId": .string(turnID),
+                "input": .array(textBlocks.map { text in
+                    .object([
+                        "type": .string("text"),
+                        "text": .string(text),
+                    ])
+                }),
+                "threadId": .string(threadID),
+            ])
+        )
+    }
+
     func interrupt(threadID: String, turnID: String) async {
         _ = try? await appServer.request(
             method: "turn/interrupt",

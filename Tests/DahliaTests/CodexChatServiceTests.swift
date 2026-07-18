@@ -91,6 +91,39 @@ import Foundation
         }
 
         @Test
+        func steeringAddsTextBlocksToTheExpectedActiveTurn() async throws {
+            let transport = TestCodexChatAppServerTransport()
+            let appServer = CodexAppServerService(transportFactory: { transport })
+            let service = CodexChatService(
+                appServer: appServer,
+                workspaceLocator: TestCodexChatWorkspaceLocator(url: URL(filePath: "/tmp/dahlia-chat-tests"))
+            )
+
+            try await service.steer(
+                threadID: "thread-1",
+                turnID: "turn-1",
+                textBlocks: ["Live context", "New instruction"]
+            )
+
+            let params = try #require(await transport.messages().first {
+                $0.objectValue?["method"]?.stringValue == "turn/steer"
+            }?.objectValue?["params"]?.objectValue)
+            #expect(params["threadId"] == .string("thread-1"))
+            #expect(params["expectedTurnId"] == .string("turn-1"))
+            #expect(params["input"] == .array([
+                .object([
+                    "type": .string("text"),
+                    "text": .string("Live context"),
+                ]),
+                .object([
+                    "type": .string("text"),
+                    "text": .string("New instruction"),
+                ]),
+            ]))
+            await appServer.shutdown()
+        }
+
+        @Test
         func turnInterruptionAndFailureAreTypedEvents() async throws {
             let interrupted = try await events(for: .interrupted)
             let failed = try await events(for: .failed)
