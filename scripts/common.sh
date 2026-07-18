@@ -30,6 +30,24 @@ read_marketing_version() {
     printf '%s\n' "$version"
 }
 
+read_build_version() {
+    local plist_path="$1"
+    local version
+
+    if [ ! -f "$plist_path" ]; then
+        echo "error: Info.plist not found: ${plist_path}" >&2
+        return 1
+    fi
+
+    version="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$plist_path")"
+    if [[ ! "$version" =~ ^[0-9]+$ ]]; then
+        echo "error: CFBundleVersion must be a non-negative integer: ${version}" >&2
+        return 1
+    fi
+
+    printf '%s\n' "$version"
+}
+
 configure_google_calendar_plist() {
     local plist_path="$1"
 
