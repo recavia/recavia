@@ -13,6 +13,7 @@ protocol CodexChatServicing: Sendable {
         model: String?,
         effort: String
     ) async throws -> AsyncThrowingStream<CodexChatTurnEvent, any Error>
+    func steer(threadID: String, turnID: String, textBlocks: [String]) async throws
     func interrupt(threadID: String, turnID: String) async
     func unsubscribe(threadID: String) async
 }

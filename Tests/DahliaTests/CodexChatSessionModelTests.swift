@@ -592,32 +592,6 @@ import Foundation
         }
 
         @Test
-        func liveTranscriptsQueuedDuringGenerationAreCoalesced() async {
-            let service = TestCodexChatService(mode: .block)
-            let settings = AppSettings()
-            settings.currentVault = Self.testVault()
-            let session = CodexChatSessionModel(
-                modelID: "default-model",
-                effort: "medium",
-                service: service,
-                settings: settings
-            )
-
-            session.toggleLiveMode()
-            session.receiveFinalizedLiveTranscript("first")
-            await waitUntilAsync { await service.sentTextBlocks.count == 1 }
-            session.receiveFinalizedLiveTranscript("second")
-            session.receiveFinalizedLiveTranscript("third")
-
-            await service.completeBlockedTurn()
-            await waitUntilAsync { await service.sentTextBlocks.count == 2 }
-
-            #expect(await service.sentTextBlocks[1].last == "<live_transcript>second&#10;third</live_transcript>")
-            session.disableLiveMode()
-            await waitUntil { !session.isGenerating }
-        }
-
-        @Test
         func disablingLiveModeCancelsTranscriptBeforeContextResolutionCompletes() async {
             let service = TestCodexChatService(mode: .complete)
             let settings = AppSettings()
@@ -643,7 +617,7 @@ import Foundation
         }
 
         @Test
-        func manualSendAfterLiveFailureRequeuesTheFailedTranscript() async {
+        func manualSendAfterLiveFailureSteersTheRecoveredTranscript() async {
             let service = TestCodexChatService(mode: .failThenComplete)
             let settings = AppSettings()
             settings.currentVault = Self.testVault()
@@ -661,48 +635,13 @@ import Foundation
 
             session.draft = "Manual recovery"
             session.sendDraft()
-            await waitUntilAsync { await service.sentTextBlocks.count == 3 }
+            await waitUntilAsync { await service.steeredTextBlocks.count == 1 }
             await waitUntil { !session.isGenerating }
 
             let sentTextBlocks = await service.sentTextBlocks
             #expect(sentTextBlocks[1].last == "Manual recovery")
-            #expect(sentTextBlocks[2].last == "<live_transcript>Failed live speech</live_transcript>")
+            #expect(await service.steeredTextBlocks[0].last == "<live_transcript>Failed live speech</live_transcript>")
             #expect(session.failedLiveTranscript == nil)
-        }
-
-        @Test
-        func pendingLiveTranscriptResumesWhenDraftAndReferencesAreCleared() async {
-            let service = TestCodexChatService(mode: .complete)
-            let settings = AppSettings()
-            let vault = Self.testVault()
-            settings.currentVault = vault
-            let session = CodexChatSessionModel(
-                modelID: "default-model",
-                effort: "medium",
-                service: service,
-                settings: settings
-            )
-
-            session.toggleLiveMode()
-            session.draft = "Still editing"
-            session.receiveFinalizedLiveTranscript("queued for draft")
-            #expect(await service.sentTextBlocks.isEmpty)
-
-            session.draft = ""
-            await waitUntilAsync { await service.sentTextBlocks.count == 1 }
-            await waitUntil { !session.isGenerating }
-
-            let meeting = Self.meetingReference(vaultID: vault.id, name: "Blocking reference", offset: 0)
-            session.updateAvailableMeetings([meeting], catalogVaultID: vault.id)
-            session.addMeetingReference(CodexChatMeetingReference(meeting: meeting))
-            session.receiveFinalizedLiveTranscript("queued for reference")
-            #expect(await service.sentTextBlocks.count == 1)
-
-            session.removeMeetingReference(id: meeting.meetingId)
-            await waitUntilAsync { await service.sentTextBlocks.count == 2 }
-            await waitUntil { !session.isGenerating }
-
-            #expect(await service.sentTextBlocks[1].last == "<live_transcript>queued for reference</live_transcript>")
         }
 
         @Test
@@ -775,6 +714,7 @@ import Foundation
 
         let mode: Mode
         private(set) var sentTextBlocks: [[String]] = []
+        private(set) var steeredTextBlocks: [[String]] = []
         private(set) var threadNames: [String] = []
         private(set) var interruptCount = 0
         private(set) var unsubscribedThreadIDs: [String] = []
@@ -905,6 +845,10 @@ import Foundation
             blockedContinuation?.yield(.interrupted)
             blockedContinuation?.finish()
             blockedContinuation = nil
+        }
+
+        func steer(threadID _: String, turnID _: String, textBlocks: [String]) async throws {
+            steeredTextBlocks.append(textBlocks)
         }
 
         func completeBlockedTurn() {

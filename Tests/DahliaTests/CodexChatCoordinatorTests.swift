@@ -250,6 +250,7 @@ import Foundation
             AsyncThrowingStream { $0.finish() }
         }
 
+        func steer(threadID _: String, turnID _: String, textBlocks _: [String]) async throws {}
         func interrupt(threadID _: String, turnID _: String) async {}
         func unsubscribe(threadID _: String) async {}
 
@@ -316,6 +317,7 @@ import Foundation
             return AsyncThrowingStream<CodexChatTurnEvent, any Error> { $0.finish() }
         }
 
+        func steer(threadID _: String, turnID _: String, textBlocks _: [String]) async throws {}
         func interrupt(threadID _: String, turnID _: String) async {}
 
         func unsubscribe(threadID: String) async {

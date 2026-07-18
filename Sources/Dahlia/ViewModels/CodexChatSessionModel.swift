@@ -47,10 +47,12 @@ final class CodexChatSessionModel: Identifiable {
     @ObservationIgnored private var didUnsubscribe = false
     @ObservationIgnored private var pendingLiveTranscript: String?
     @ObservationIgnored private var didTruncatePendingLiveTranscript = false
+    @ObservationIgnored private var pendingManualInputs: [String] = []
     @ObservationIgnored private var isActiveTurnLiveTranscript = false
     @ObservationIgnored private var activeSubmissionID: UUID?
     @ObservationIgnored private var activeResponseID: String?
     @ObservationIgnored private var turnTask: Task<Void, Never>?
+    @ObservationIgnored private var steerTask: Task<Void, Never>?
     @ObservationIgnored private var failedSubmission: CodexChatFailedSubmission?
     @ObservationIgnored private var usesLiveModePlaceholderTitle = false
     @ObservationIgnored private var liveModeChangeHandler: (@MainActor (Bool) -> Void)?
@@ -142,6 +144,14 @@ final class CodexChatSessionModel: Identifiable {
             referenceIDs: referenceIDsSnapshot,
             draft: draftSnapshot
         )
+        if isGenerating {
+            enqueueManualInput(
+                text,
+                draftSnapshot: draftSnapshot,
+                referenceIDsSnapshot: referenceIDsSnapshot
+            )
+            return
+        }
         submit(
             text,
             clearsDraft: true,
@@ -202,6 +212,10 @@ final class CodexChatSessionModel: Identifiable {
     func release() {
         guard !isReleased else { return }
         isReleased = true
+        steerTask?.cancel()
+        steerTask = nil
+        pendingManualInputs.removeAll()
+        pendingLiveTranscript = nil
         if isGenerating {
             stop()
         }
@@ -315,6 +329,7 @@ private extension CodexChatSessionModel {
             if isStopRequested, let backendThreadID {
                 Task { await service.interrupt(threadID: backendThreadID, turnID: turnID) }
             }
+            processPendingInputIfPossible()
         case let .delta(itemID, text):
             accumulator.appendResponseDelta(itemID: itemID, text: text)
             updateLimiter.submit()
@@ -411,8 +426,7 @@ private extension CodexChatSessionModel {
     }
 
     private func finishGeneration(
-        submissionID: UUID?,
-        continueLiveQueue: Bool = false
+        submissionID: UUID?
     ) {
         guard activeSubmissionID == submissionID else { return }
         isGenerating = false
@@ -423,9 +437,7 @@ private extension CodexChatSessionModel {
         activeResponseID = nil
         turnTask = nil
         unsubscribeIfPossible()
-        if continueLiveQueue {
-            sendNextLiveTranscriptIfPossible()
-        }
+        processPendingInputIfPossible()
     }
 
     private static let maximumEventsBetweenYields = 64
@@ -582,12 +594,8 @@ private extension CodexChatSessionModel {
         isLiveModeSnapshot: Bool,
         submissionID: UUID
     ) async {
-        var shouldContinueLiveQueue = false
         defer {
-            finishGeneration(
-                submissionID: submissionID,
-                continueLiveQueue: shouldContinueLiveQueue
-            )
+            finishGeneration(submissionID: submissionID)
         }
         let context: CodexChatContext?
         do {
@@ -604,12 +612,10 @@ private extension CodexChatSessionModel {
         }
         guard !isReleased, isBoundToCurrentVault else { return }
         if clearsDraft {
-            if draft == draftSnapshot {
-                draft = ""
-            }
-            if selectedMeetingReferenceIDs == referenceIDsSnapshot {
-                selectedMeetingReferenceIDs = []
-            }
+            clearComposer(
+                draftSnapshot: draftSnapshot,
+                referenceIDsSnapshot: referenceIDsSnapshot
+            )
         }
         var replacedLiveModePlaceholderTitle = false
         if liveTranscript == nil {
@@ -622,7 +628,7 @@ private extension CodexChatSessionModel {
         messages.append(CodexChatMessage(id: responseID, role: .assistant, text: "", isStreaming: true))
         activeResponseID = responseID
 
-        shouldContinueLiveQueue = await runTurn(
+        _ = await runTurn(
             text: liveTranscript == nil ? text : nil,
             liveTranscript: liveTranscript,
             context: context,
@@ -651,15 +657,164 @@ private extension CodexChatSessionModel {
         liveModeChangeHandler?(isEnabled)
     }
 
+    func enqueueManualInput(
+        _ text: String,
+        draftSnapshot: String,
+        referenceIDsSnapshot: [UUID]
+    ) {
+        lastSubmittedText = text
+        pendingManualInputs.append(text)
+        clearComposer(
+            draftSnapshot: draftSnapshot,
+            referenceIDsSnapshot: referenceIDsSnapshot
+        )
+        processPendingInputIfPossible()
+    }
+
+    func clearComposer(
+        draftSnapshot: String,
+        referenceIDsSnapshot: [UUID]
+    ) {
+        if draft == draftSnapshot {
+            draft = ""
+        }
+        if selectedMeetingReferenceIDs == referenceIDsSnapshot {
+            selectedMeetingReferenceIDs = []
+        }
+    }
+
+    func processPendingInputIfPossible() {
+        guard !isReleased,
+              isBoundToCurrentVault,
+              steerTask == nil,
+              errorMessage == nil else { return }
+        if isGenerating {
+            startSteeringPendingInputIfPossible()
+        } else if !pendingManualInputs.isEmpty {
+            let text = pendingManualInputs.removeFirst()
+            submit(text, clearsDraft: false)
+        } else {
+            sendNextLiveTranscriptIfPossible()
+        }
+    }
+
+    func startSteeringPendingInputIfPossible() {
+        guard let backendThreadID,
+              let activeTurnID,
+              let input = dequeuePendingSteerInput() else { return }
+        steerTask = Task { [weak self] in
+            await self?.steer(input, threadID: backendThreadID, turnID: activeTurnID)
+        }
+    }
+
+    func dequeuePendingSteerInput() -> CodexChatPendingInput? {
+        if !pendingManualInputs.isEmpty {
+            return .manual(pendingManualInputs.removeFirst())
+        }
+        guard isLiveModeEnabled,
+              failedLiveTranscript == nil,
+              let transcript = pendingLiveTranscript else { return nil }
+        pendingLiveTranscript = nil
+        let wasTruncated = didTruncatePendingLiveTranscript
+        didTruncatePendingLiveTranscript = false
+        return .liveTranscript(transcript, wasTruncated: wasTruncated)
+    }
+
+    func steer(_ input: CodexChatPendingInput, threadID: String, turnID: String) async {
+        defer {
+            steerTask = nil
+            processPendingInputIfPossible()
+        }
+        do {
+            guard let vaultID else { throw CodexAppServerError.invalidProtocolResponse }
+            let context = try await contextProvider.currentContext(vaultID: vaultID)
+            guard !Task.isCancelled,
+                  isGenerating,
+                  activeTurnID == turnID,
+                  backendThreadID == threadID else {
+                requeue(input)
+                return
+            }
+
+            let text: String?
+            let liveTranscript: String?
+            switch input {
+            case let .manual(manualText):
+                text = manualText
+                liveTranscript = nil
+            case let .liveTranscript(transcript, _):
+                guard isLiveModeEnabled else { return }
+                text = nil
+                liveTranscript = transcript
+            }
+            try await service.steer(
+                threadID: threadID,
+                turnID: turnID,
+                textBlocks: CodexChatPromptCodec.encodeTextBlocks(
+                    text: text,
+                    context: context,
+                    isLiveMode: isLiveModeEnabled,
+                    liveTranscript: liveTranscript
+                )
+            )
+            await applySuccessfulSteer(input, context: context)
+        } catch is CancellationError {
+            requeue(input)
+        } catch {
+            if !isGenerating || activeTurnID != turnID {
+                requeue(input)
+            } else {
+                errorMessage = error.localizedDescription
+                recordSteerFailure(input)
+            }
+        }
+    }
+
+    func applySuccessfulSteer(_ input: CodexChatPendingInput, context: CodexChatContext?) async {
+        switch input {
+        case let .manual(text):
+            messages.append(CodexChatMessage(role: .user, text: text, context: context))
+            _ = await replaceLiveModePlaceholderTitleIfNeeded(with: text)
+        case let .liveTranscript(_, wasTruncated):
+            if wasTruncated {
+                noticeMessage = L10n.chatLiveTranscriptBacklogTruncated
+            }
+        }
+    }
+
+    func recordSteerFailure(_ input: CodexChatPendingInput) {
+        switch input {
+        case let .manual(text):
+            recordFailedSubmission(text: text, liveTranscript: nil)
+        case let .liveTranscript(text, _):
+            recordFailedSubmission(text: nil, liveTranscript: text)
+        }
+    }
+
+    func requeue(_ input: CodexChatPendingInput) {
+        guard !isReleased else { return }
+        switch input {
+        case let .manual(text):
+            pendingManualInputs.insert(text, at: 0)
+        case let .liveTranscript(text, wasTruncated):
+            let combined = pendingLiveTranscript.map { text + "\n" + $0 } ?? text
+            pendingLiveTranscript = String(combined.suffix(Self.maximumPendingLiveTranscriptCharacters))
+            didTruncatePendingLiveTranscript = wasTruncated
+                || combined.count > Self.maximumPendingLiveTranscriptCharacters
+                || didTruncatePendingLiveTranscript
+        }
+    }
+
     func sendNextLiveTranscriptIfPossible() {
         guard isLiveModeEnabled,
               !isReleased,
-              !isGenerating,
               errorMessage == nil,
               failedLiveTranscript == nil,
-              draft.nilIfBlank == nil,
-              selectedMeetingReferenceIDs.isEmpty,
               let transcript = pendingLiveTranscript else { return }
+        if isGenerating {
+            startSteeringPendingInputIfPossible()
+            return
+        }
         pendingLiveTranscript = nil
         let wasTruncated = didTruncatePendingLiveTranscript
         didTruncatePendingLiveTranscript = false
@@ -693,7 +848,6 @@ extension CodexChatSessionModel {
 
     var canSend: Bool {
         isBoundToCurrentVault
-            && !isGenerating
             && (draft.nilIfBlank != nil || !selectedMeetingReferenceIDs.isEmpty)
     }
 

@@ -72,7 +72,7 @@ struct CodexChatComposer: View {
                     CodexChatConfigurationButton(session: session)
                 }
 
-                if session.isGenerating {
+                if session.isGenerating, !session.canSend {
                     CodexChatActionButton(
                         label: L10n.stopGenerating,
                         systemImage: "stop.fill",
