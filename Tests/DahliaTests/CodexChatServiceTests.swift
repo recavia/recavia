@@ -243,6 +243,7 @@ import Foundation
             #expect(config["memories.use_memories"] == .bool(false))
             #expect(config["orchestrator.mcp.enabled"] == .bool(false))
             #expect(config["skills.include_instructions"] == .bool(false))
+            #expect(config["web_search"] == .string("live"))
             #expect(config["mcp_servers"] == .object([
                 "dahlia": .object([
                     "args": .array([.string("--vault-id"), .string(vaultID.uuidString)]),
@@ -259,6 +260,8 @@ import Foundation
             #expect(instructions?.contains("MeetingDraft") == true)
             #expect(instructions?.contains("meeting:<UUID>") == true)
             #expect(instructions?.contains("get_meeting with each UUID directly") == true)
+            #expect(instructions?.contains("use web search") == true)
+            #expect(instructions?.contains("cite the sources") == true)
         }
     }
 

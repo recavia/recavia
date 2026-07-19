@@ -412,6 +412,7 @@ actor CodexAppServerService {
             vaultID: vaultID
         )
         config["mcp_servers"] = .object(servers)
+        config["web_search"] = .string("live")
         return .object(config)
     }
 
