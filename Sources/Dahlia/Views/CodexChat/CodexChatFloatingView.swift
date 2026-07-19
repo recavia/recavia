@@ -26,6 +26,10 @@ struct CodexChatFloatingView: View {
     var body: some View {
         GeometryReader { geometry in
             let origin = layout.origin(in: geometry.size, dragTranslation: dragTranslation)
+            let resizeHandlePosition = layout.resizeHandlePosition(
+                in: geometry.size,
+                dragTranslation: dragTranslation
+            )
             ZStack(alignment: .topLeading) {
                 CodexChatView(
                     session: coordinator.floatingSession,
@@ -55,10 +59,7 @@ struct CodexChatFloatingView: View {
                 )
 
                 CodexChatResizeHandle(layout: $layout, availableSize: geometry.size)
-                    .position(
-                        x: layout.dockSide == .right ? origin.x + 12 : origin.x + layout.size.width - 12,
-                        y: origin.y + 12
-                    )
+                    .position(resizeHandlePosition)
             }
             .onChange(of: geometry.size) {
                 layout.clamp(to: geometry.size)
