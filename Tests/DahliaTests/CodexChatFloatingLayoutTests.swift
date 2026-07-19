@@ -40,5 +40,16 @@ import CoreGraphics
             #expect(origin.x == 464)
             #expect(origin.y == 224)
         }
+
+        @Test
+        func resizeHandleStaysOnOuterTopCorner() {
+            let available = CGSize(width: 1000, height: 800)
+
+            let rightDockedLayout = CodexChatFloatingLayout(dockSide: .right)
+            #expect(rightDockedLayout.resizeHandlePosition(in: available) == CGPoint(x: 464, y: 224))
+
+            let leftDockedLayout = CodexChatFloatingLayout(dockSide: .left)
+            #expect(leftDockedLayout.resizeHandlePosition(in: available) == CGPoint(x: 536, y: 224))
+        }
     }
 #endif

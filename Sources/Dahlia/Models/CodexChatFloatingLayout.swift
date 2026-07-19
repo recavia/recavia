@@ -40,6 +40,14 @@ struct CodexChatFloatingLayout: Equatable {
         )
     }
 
+    func resizeHandlePosition(in availableSize: CGSize, dragTranslation: CGSize = .zero) -> CGPoint {
+        let origin = origin(in: availableSize, dragTranslation: dragTranslation)
+        return CGPoint(
+            x: dockSide == .right ? origin.x : origin.x + size.width,
+            y: origin.y
+        )
+    }
+
     private static func clamped(_ size: CGSize, availableSize: CGSize) -> CGSize {
         CGSize(
             width: min(max(size.width, minimumSize.width), max(minimumSize.width, availableSize.width - margin * 2)),
