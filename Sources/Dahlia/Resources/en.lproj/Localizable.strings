@@ -738,7 +738,7 @@
 "Could not update the Codex configuration: %@" = "Could not update the Codex configuration: %@";
 "Codex is configured for Databricks" = "Codex is configured for Databricks";
 "The selected AI account is not ready. Open AI Connection in Settings and finish its configuration." = "The selected AI account is not ready. Open AI Connection in Settings and finish its configuration.";
-"Dahlia writes the selected profile to its Codex configuration. Tokens remain managed by Databricks CLI." = "Dahlia writes the selected profile to its Codex configuration. Tokens remain managed by Databricks CLI.";
+"Codex uses this Databricks CLI profile. Browser sign-in opens when authentication expires." = "Codex uses this Databricks CLI profile. Browser sign-in opens when authentication expires.";
 "Codex returned no available models. Try again." = "Codex returned no available models. Try again.";
 "Models are loaded from the bundled Codex app-server." = "Models are loaded from the bundled Codex app-server.";
 "The saved model is used when available; otherwise Codex's default model is selected." = "The saved model is used when available; otherwise Codex's default model is selected.";

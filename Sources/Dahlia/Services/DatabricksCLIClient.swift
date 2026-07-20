@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 struct DatabricksCLIClient {
     struct CommandOutput {
@@ -50,7 +51,11 @@ struct DatabricksCLIClient {
             guard let executableURL else {
                 throw DatabricksCLIError.cliNotInstalled
             }
-            return try await Self.execute(executableURL: executableURL, arguments: arguments)
+            return try await Self.execute(
+                executableURL: executableURL,
+                arguments: arguments,
+                capturesStandardOutput: arguments.prefix(2) != ["auth", "token"]
+            )
         }
     }
 
@@ -59,15 +64,13 @@ struct DatabricksCLIClient {
     }
 
     func profiles() async throws -> [Profile] {
-        let output = try await runCommand([
+        let output = try await runValidatedCommand([
             "auth",
             "profiles",
             "--skip-validate",
             "--output",
             "json",
         ])
-        try Task.checkCancellation()
-        try validate(output)
 
         guard let response = try? JSONDecoder().decode(ProfilesResponse.self, from: output.standardOutput) else {
             throw DatabricksCLIError.invalidProfilesResponse
@@ -77,23 +80,56 @@ struct DatabricksCLIClient {
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
+    func ensureAuthenticated(profileName: String) async throws {
+        let tokenArguments = [
+            "auth",
+            "token",
+            "--profile",
+            profileName,
+            "--output",
+            "json",
+        ]
+        let tokenOutput = try await runCommand(tokenArguments)
+        try Task.checkCancellation()
+        guard tokenOutput.terminationStatus != 0 else { return }
+        guard requiresBrowserLogin(tokenOutput) else {
+            try validate(tokenOutput)
+            return
+        }
+
+        _ = try await runValidatedCommand([
+            "auth",
+            "login",
+            "--profile",
+            profileName,
+        ])
+        _ = try await runValidatedCommand(tokenArguments)
+    }
+
     static func locateExecutable(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL? {
         CommandLineToolLocator.executableURL(named: "databricks", environment: environment)
     }
 
-    private static func execute(executableURL: URL, arguments: [String]) async throws -> CommandOutput {
+    private static func execute(
+        executableURL: URL,
+        arguments: [String],
+        capturesStandardOutput: Bool
+    ) async throws -> CommandOutput {
         let process = Process()
-        let standardOutput = Pipe()
+        let launchState = OSAllocatedUnfairLock(initialState: false)
+        let standardOutput = capturesStandardOutput ? Pipe() : nil
         let standardError = Pipe()
         process.executableURL = executableURL
         process.arguments = arguments
-        process.standardOutput = standardOutput
+        process.standardOutput = standardOutput ?? FileHandle.nullDevice
         process.standardError = standardError
 
-        let standardOutputTask = Task { try await readToEnd(standardOutput.fileHandleForReading) }
+        let standardOutputTask = standardOutput.map { pipe in
+            Task { try await readToEnd(pipe.fileHandleForReading) }
+        }
         let standardErrorTask = Task { try await readToEnd(standardError.fileHandleForReading) }
         defer {
-            standardOutputTask.cancel()
+            standardOutputTask?.cancel()
             standardErrorTask.cancel()
         }
 
@@ -112,20 +148,31 @@ struct DatabricksCLIClient {
                     continuation.resume(returning: process.terminationStatus)
                 }
                 do {
-                    try process.run()
+                    let didLaunch = try launchState.withLock { isCancelled in
+                        guard !isCancelled else { return false }
+                        try process.run()
+                        return true
+                    }
+                    if !didLaunch {
+                        process.terminationHandler = nil
+                        continuation.resume(throwing: CancellationError())
+                    }
                 } catch {
                     process.terminationHandler = nil
                     continuation.resume(throwing: error)
                 }
             }
         } onCancel: {
-            if process.isRunning {
-                process.terminate()
+            launchState.withLock { isCancelled in
+                isCancelled = true
+                if process.isRunning {
+                    process.terminate()
+                }
             }
         }
         try Task.checkCancellation()
 
-        let outputData = try await standardOutputTask.value
+        let outputData = try await standardOutputTask?.value ?? Data()
         let errorData = try await standardErrorTask.value
         return CommandOutput(
             standardOutput: outputData,
@@ -135,10 +182,10 @@ struct DatabricksCLIClient {
     }
 
     private static func closeParentWriteHandles(
-        standardOutput: Pipe,
+        standardOutput: Pipe?,
         standardError: Pipe
     ) {
-        try? standardOutput.fileHandleForWriting.close()
+        try? standardOutput?.fileHandleForWriting.close()
         try? standardError.fileHandleForWriting.close()
     }
 
@@ -170,12 +217,29 @@ struct DatabricksCLIClient {
         return data
     }
 
+    private func runValidatedCommand(_ arguments: [String]) async throws -> CommandOutput {
+        let output = try await runCommand(arguments)
+        try Task.checkCancellation()
+        try validate(output)
+        return output
+    }
+
     private func validate(_ output: CommandOutput) throws {
         guard output.terminationStatus == 0 else {
             let detail = String(data: output.standardError, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             throw DatabricksCLIError.commandFailed(detail: detail?.nilIfBlank)
         }
+    }
+
+    private func requiresBrowserLogin(_ output: CommandOutput) -> Bool {
+        guard let detail = String(data: output.standardError, encoding: .utf8)?.lowercased() else {
+            return false
+        }
+        // These are Databricks CLI's explicit diagnostics for a missing cached login
+        // or an invalid refresh token. Other failures need their original error.
+        return detail.contains("refresh token is invalid")
+            || detail.contains("databricks oauth is not configured for this host")
     }
 
     private struct ProfilesResponse: Decodable {

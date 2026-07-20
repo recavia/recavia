@@ -82,6 +82,9 @@ final class DatabricksAccountController {
 
         do {
             try Task.checkCancellation()
+            try configurationManager.validateDatabricks(profile: profile)
+            try await client.ensureAuthenticated(profileName: profile.name)
+            try Task.checkCancellation()
             configurationStore.invalidateCodexAccountConfiguration()
             if try configurationManager.configureDatabricks(profile: profile) {
                 try await service.reloadConfiguration()

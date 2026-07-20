@@ -1238,7 +1238,7 @@ enum L10n {
         bundle: bundle
     ) }
     static var databricksCodexDescription: String { String(
-        localized: "Dahlia writes the selected profile to its Codex configuration. Tokens remain managed by Databricks CLI.",
+        localized: "Codex uses this Databricks CLI profile. Browser sign-in opens when authentication expires.",
         bundle: bundle
     ) }
     static var codexNoModels: String { String(localized: "Codex returned no available models. Try again.", bundle: bundle) }

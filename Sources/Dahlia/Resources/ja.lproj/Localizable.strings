@@ -738,7 +738,7 @@
 "Could not update the Codex configuration: %@" = "Codex 設定を更新できませんでした: %@";
 "Codex is configured for Databricks" = "Codex を Databricks 用に設定しました";
 "The selected AI account is not ready. Open AI Connection in Settings and finish its configuration." = "選択した AI アカウントの準備が完了していません。設定の「AI 接続」を開き、設定を完了してください。";
-"Dahlia writes the selected profile to its Codex configuration. Tokens remain managed by Databricks CLI." = "Dahlia は、選択したプロファイルを専用 Codex 設定へ書き込みます。トークンは Databricks CLI が引き続き管理します。";
+"Codex uses this Databricks CLI profile. Browser sign-in opens when authentication expires." = "Codex はこの Databricks CLI プロファイルを使用します。認証の有効期限が切れた場合は、ブラウザでのサインインを開きます。";
 "Codex returned no available models. Try again." = "Codex から利用可能なモデルが返されませんでした。再試行してください。";
 "Models are loaded from the bundled Codex app-server." = "モデルは同梱 Codex app-server から取得します。";
 "The saved model is used when available; otherwise Codex's default model is selected." = "保存済みモデルが利用可能なら使用し、それ以外は Codex のデフォルトモデルを選択します。";
