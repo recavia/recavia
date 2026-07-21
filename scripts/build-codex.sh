@@ -1,10 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-CODEX_VERSION="0.144.4"
+CODEX_VERSION="0.144.6"
 TARGET="aarch64-apple-darwin"
 ASSET_NAME="codex-${TARGET}.tar.gz"
-ASSET_SHA256="77c8969a481302f9db1d9ea2a6c21c083abae3f1a8fc8a7275dc38323699391e"
+ASSET_SHA256="023590f828bc9507ac61132ee35e74d3c5d33fb5ba3e1ca4fc2e013a2f71a3d7"
 ARCHIVE_BINARY="codex-${TARGET}"
 DOWNLOAD_URL="https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/${ASSET_NAME}"
 
@@ -56,9 +56,7 @@ validate_output() {
         "${PROJECT_DIR}/Sources/Dahlia/Services/CodexBundle.swift:static let version = \"${CODEX_VERSION}\"" \
         "${PROJECT_DIR}/Resources/Codex-NOTICE.txt:Codex CLI ${CODEX_VERSION}" \
         "${PROJECT_DIR}/Resources/Codex-NOTICE.txt:Asset: ${ASSET_NAME}" \
-        "${PROJECT_DIR}/Resources/Codex-NOTICE.txt:SHA-256: ${ASSET_SHA256}" \
-        "${PROJECT_DIR}/README.md:Codex ${CODEX_VERSION}" \
-        "${PROJECT_DIR}/README_ja.md:Codex ${CODEX_VERSION}"; do
+        "${PROJECT_DIR}/Resources/Codex-NOTICE.txt:SHA-256: ${ASSET_SHA256}"; do
         file_path="${reference%%:*}"
         expected="${reference#*:}"
         if ! grep -Fq "$expected" "$file_path"; then

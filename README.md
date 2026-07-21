@@ -52,7 +52,7 @@ swift test
 ./scripts/lint.sh
 ```
 
-> **Note:** `swift run Dahlia` has no bundled Codex helper and cannot use Data Protection Keychain. Use `run-dev.sh` for full functionality. `run-dev.sh` uses the shared development profile at `~/Library/Application Support/Dahlia-Development`, keeping its database, recording recovery files, Codex state, and process lock separate from the release app. Development builds started by `run-dev.sh` share this profile with each other. On their first run, the app-bundle scripts download the pinned official Codex 0.144.4 GitHub Release for `aarch64-apple-darwin`, verify its SHA-256, and cache it under `.build`.
+> **Note:** `swift run Dahlia` has no bundled Codex helper and cannot use Data Protection Keychain. Use `run-dev.sh` for full functionality. `run-dev.sh` uses the shared development profile at `~/Library/Application Support/Dahlia-Development`, keeping its database, recording recovery files, Codex state, and process lock separate from the release app. Development builds started by `run-dev.sh` share this profile with each other. On their first run, the app-bundle scripts download the pinned official Codex GitHub Release for `aarch64-apple-darwin`, verify its SHA-256, and cache it under `.build`.
 
 The lint script and pre-commit hook use the exact SwiftFormat version managed by the independent `BuildTools` Swift package. SwiftPM resolves and caches the tool separately from the app's dependencies.
 

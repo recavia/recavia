@@ -52,7 +52,7 @@ swift test
 ./scripts/lint.sh
 ```
 
-> **注意:** `swift run Dahlia` には同梱 Codex ヘルパーがなく、Data Protection Keychain も使用できません。フル機能には `run-dev.sh` を使用してください。`run-dev.sh` は共有開発プロファイル `~/Library/Application Support/Dahlia-Development` を使用し、DB、録音復旧ファイル、Codex 状態、プロセスロックを正アプリから分離します。`run-dev.sh` で起動する開発版同士はこのプロファイルを共有します。アプリバンドル用スクリプトの初回実行時は、固定した Codex 0.144.4 の公式 GitHub Release を `aarch64-apple-darwin` 向けに取得し、SHA-256 を検証して `.build` 配下へキャッシュします。
+> **注意:** `swift run Dahlia` には同梱 Codex ヘルパーがなく、Data Protection Keychain も使用できません。フル機能には `run-dev.sh` を使用してください。`run-dev.sh` は共有開発プロファイル `~/Library/Application Support/Dahlia-Development` を使用し、DB、録音復旧ファイル、Codex 状態、プロセスロックを正アプリから分離します。`run-dev.sh` で起動する開発版同士はこのプロファイルを共有します。アプリバンドル用スクリプトの初回実行時は、固定した Codex の公式 GitHub Release を `aarch64-apple-darwin` 向けに取得し、SHA-256 を検証して `.build` 配下へキャッシュします。
 
 `build-app.sh` または `notarize.sh` の実行前に `SENTRY_DSN` を設定すると、生成される release アプリの `Info.plist` に DSN を埋め込み、Finder 起動でも Sentry を有効化できます。Debug 実行では送信しないため、`swift run Dahlia` と `run-dev.sh` は既定で Sentry イベントを送信しません。
 

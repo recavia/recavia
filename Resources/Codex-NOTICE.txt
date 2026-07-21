@@ -1,10 +1,10 @@
-Dahlia includes Codex CLI 0.144.4 from the OpenAI Codex project.
+Dahlia includes Codex CLI 0.144.6 from the OpenAI Codex project.
 
 Source: https://github.com/openai/codex
-Release: rust-v0.144.4
-Commit: 8c68d4c87dc54d38861f5114e920c3de2efa5876
+Release: rust-v0.144.6
+Commit: 5d1fbf26c43abc65a203928b2e31561cb039e06d
 Asset: codex-aarch64-apple-darwin.tar.gz
-SHA-256: 77c8969a481302f9db1d9ea2a6c21c083abae3f1a8fc8a7275dc38323699391e
+SHA-256: 023590f828bc9507ac61132ee35e74d3c5d33fb5ba3e1ca4fc2e013a2f71a3d7
 
 Codex is licensed under the Apache License 2.0. The complete license text is
 included alongside this notice.
