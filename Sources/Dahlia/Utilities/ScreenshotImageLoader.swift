@@ -93,7 +93,7 @@ final class ScreenshotImageLoadModel: ObservableObject {
         state = image.map(State.loaded) ?? .failed
     }
 
-    /// Lazy grid が保持している画面外 View からデコード済み画像を解放する。
+    /// 画面外になった表示要素からデコード済み画像を解放する。
     func unload() {
         loadGeneration &+= 1
         state = .idle

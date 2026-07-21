@@ -80,144 +80,6 @@ private struct ScreenshotOverlayView: View {
     }
 }
 
-/// スクリーンショットのサムネイル表示。
-private struct ScreenshotThumbnailView: View {
-    let screenshot: MeetingScreenshotRecord
-    let timestamp: String
-    let viewModel: CaptionViewModel
-    let isSelecting: Bool
-    let isReferencedBySummary: Bool
-    @Binding var expandedScreenshot: MeetingScreenshotRecord?
-    @Binding var selectedScreenshotIds: Set<UUID>
-    @StateObject private var imageLoader = ScreenshotImageLoadModel()
-
-    private var isSelected: Bool {
-        selectedScreenshotIds.contains(screenshot.id)
-    }
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Button(action: handleImageAction) {
-                Group {
-                    if case let .loaded(thumbnailImage) = imageLoader.state {
-                        Image(decorative: thumbnailImage, scale: 1)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
-                    } else {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.primary.opacity(0.05))
-                            .aspectRatio(16 / 9, contentMode: .fit)
-                    }
-                }
-                .overlay(alignment: .topTrailing) {
-                    if isSelecting {
-                        Image(systemName: selectionIndicatorSystemImage)
-                            .font(.title2)
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(selectionIndicatorColor, .black.opacity(0.45))
-                            .padding(8)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .pointerStyle(.link)
-            .disabled(isSelecting && isReferencedBySummary)
-            .accessibilityLabel(imageActionAccessibilityLabel)
-            .accessibilityValue(isSelected ? L10n.selected : "")
-            HStack {
-                Text(timestamp)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if isReferencedBySummary {
-                    Image(systemName: "lock.fill")
-                        .foregroundStyle(.secondary)
-                        .help(L10n.screenshotUsedInSummary)
-                }
-                if !isSelecting {
-                    Button(L10n.download, systemImage: "arrow.down.circle") {
-                        viewModel.downloadScreenshot(screenshot)
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.plain)
-                    .pointerStyle(.link)
-                    .foregroundStyle(.secondary)
-                    .help(L10n.download)
-
-                    Button(L10n.delete, systemImage: "trash", role: .destructive) {
-                        viewModel.deleteScreenshot(screenshot)
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.plain)
-                    .pointerStyle(.link)
-                    .foregroundStyle(.secondary)
-                    .disabled(isReferencedBySummary || viewModel.isSummaryGenerating || viewModel.isDeletingScreenshots)
-                    .help(isReferencedBySummary ? L10n.screenshotUsedInSummary : L10n.delete)
-                }
-            }
-        }
-        .padding(6)
-        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
-        .task(id: screenshot.id) {
-            await imageLoader.load(
-                screenshotID: screenshot.id,
-                data: screenshot.imageData,
-                maxPixelSize: ScreenshotGridSizing.maximumThumbnailPixelSize
-            )
-        }
-        .onDisappear {
-            imageLoader.unload()
-        }
-    }
-
-    private func handleImageAction() {
-        if isSelecting {
-            guard !isReferencedBySummary else { return }
-            if isSelected {
-                selectedScreenshotIds.remove(screenshot.id)
-            } else {
-                selectedScreenshotIds.insert(screenshot.id)
-            }
-        } else {
-            withAnimation(.easeOut(duration: 0.15)) {
-                expandedScreenshot = screenshot
-            }
-        }
-    }
-
-    private var imageActionAccessibilityLabel: String {
-        if isSelecting, isReferencedBySummary {
-            L10n.screenshotUsedInSummary
-        } else if isSelecting {
-            L10n.select
-        } else {
-            L10n.open
-        }
-    }
-
-    private var selectionIndicatorSystemImage: String {
-        if isReferencedBySummary {
-            "lock.circle.fill"
-        } else if isSelected {
-            "checkmark.circle.fill"
-        } else {
-            "circle"
-        }
-    }
-
-    private var selectionIndicatorColor: Color {
-        if isReferencedBySummary {
-            .secondary
-        } else if isSelected {
-            .accentColor
-        } else {
-            .white
-        }
-    }
-}
-
 /// ミーティング詳細のタイトル。クリックでインライン編集できる。
 private struct MeetingNameHeader: View {
     let title: String
@@ -712,33 +574,27 @@ struct ControlPanelView: View {
 
                 Divider()
 
-                ScrollView {
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: screenshotMinimumWidth), spacing: 12)],
-                        spacing: 12
-                    ) {
-                        let timeBase = screenshotTimeBase
-                        let recordingSessions = viewModel.store.recordingSessions
-                        ForEach(viewModel.screenshots, id: \.id) { screenshot in
-                            ScreenshotThumbnailView(
-                                screenshot: screenshot,
-                                timestamp: Formatters.elapsedHHmmss(
-                                    at: screenshot.capturedAt,
-                                    sessionId: screenshot.sessionId,
-                                    sessions: recordingSessions,
-                                    fallbackTimeBase: timeBase
-                                ),
-                                viewModel: viewModel,
-                                isSelecting: isSelectingScreenshots,
-                                isReferencedBySummary: referencedScreenshotIds.contains(screenshot.id),
-                                expandedScreenshot: $expandedScreenshot,
-                                selectedScreenshotIds: $selectedScreenshotIds
-                            )
-                        }
-                    }
-                    .padding(12)
-                }
+                ScreenshotCollectionView(
+                    meetingID: viewModel.screenshots[0].meetingId,
+                    screenshots: viewModel.screenshots,
+                    recordingSessions: viewModel.store.recordingSessions,
+                    fallbackTimeBase: screenshotTimeBase,
+                    minimumItemWidth: screenshotMinimumWidth,
+                    isSelecting: isSelectingScreenshots,
+                    referencedScreenshotIDs: referencedScreenshotIds,
+                    isDeletionDisabled: viewModel.isSummaryGenerating || viewModel.isDeletingScreenshots,
+                    selectedScreenshotIDs: $selectedScreenshotIds,
+                    open: openScreenshot,
+                    download: viewModel.downloadScreenshot,
+                    delete: viewModel.deleteScreenshot
+                )
             }
+        }
+    }
+
+    private func openScreenshot(_ screenshot: MeetingScreenshotRecord) {
+        withAnimation(.easeOut(duration: 0.15)) {
+            expandedScreenshot = screenshot
         }
     }
 

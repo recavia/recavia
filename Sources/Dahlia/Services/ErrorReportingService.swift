@@ -53,6 +53,18 @@ enum ErrorReportingService {
         }
     }
 
+    static func recordScreenshotCollectionState(countBucket: Int, minimumWidthBucket: Int) {
+        guard isEnabled else { return }
+        let breadcrumb = Breadcrumb(level: .info, category: "ui.screenshot_grid")
+        breadcrumb.type = "state"
+        breadcrumb.data = [
+            "backend": "nscollectionview",
+            "count_bucket": String(countBucket),
+            "minimum_width_bucket": String(minimumWidthBucket),
+        ]
+        SentrySDK.addBreadcrumb(breadcrumb)
+    }
+
     static func resolveDSN(infoDictionary: [String: Any], isDebugBuild: Bool) -> String? {
         guard !isDebugBuild else { return nil }
         return trimmedString(for: dsnInfoKey, in: infoDictionary)
