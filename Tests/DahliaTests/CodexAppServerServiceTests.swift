@@ -142,14 +142,11 @@ import Foundation
 
         @Test
         func requestTimeoutKeepsHealthySharedTransport() async throws {
-            let transport = TestCodexAppServerTransport(mode: .blockFirstModelList)
-            let service = CodexAppServerService(
-                transportFactory: { transport },
-                transportTimeout: .milliseconds(20)
-            )
+            let transport = TestCodexAppServerTransport(mode: .models)
+            let service = CodexAppServerService(transportFactory: { transport })
 
-            await #expect(throws: CodexAppServerError.self) {
-                _ = try await service.models(forceRefresh: true)
+            await #expect(throws: CodexAppServerError.requestTimedOut("test/blocked")) {
+                _ = try await service.request(method: "test/blocked", timeout: .milliseconds(20))
             }
             #expect(await !transport.isClosed)
 

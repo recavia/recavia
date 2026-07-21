@@ -14,6 +14,41 @@ import GRDB
         }
     }
 
+    private enum AudioConsumptionGateError: Error {
+        case timedOut
+    }
+
+    private actor AudioConsumptionGate {
+        private var isOpen = false
+        private var isWaiting = false
+        private var openWaiter: CheckedContinuation<Void, Never>?
+
+        func wait() async {
+            isWaiting = true
+            guard !isOpen else { return }
+            await withCheckedContinuation { continuation in
+                openWaiter = continuation
+            }
+        }
+
+        func waitUntilWaiting(timeout: Duration = .seconds(30)) async throws {
+            let deadline = ContinuousClock.now.advanced(by: timeout)
+            while !isWaiting {
+                guard ContinuousClock.now < deadline else {
+                    isOpen = true
+                    throw AudioConsumptionGateError.timedOut
+                }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+        }
+
+        func open() {
+            isOpen = true
+            openWaiter?.resume()
+            openWaiter = nil
+        }
+    }
+
     @MainActor
     @Suite(.serialized)
     // Segment lifecycle scenarios share one serialized suite and common fixtures.
@@ -446,25 +481,31 @@ import GRDB
         func writeQueueOverflowRejectsLaterBuffersAndPreservesAcceptedPrefix() async throws {
             let fixture = try BatchAudioTestFixture(name: "WriteQueueOverflow")
             defer { fixture.removeFiles() }
-            let recorder = try makeRecorder(fixture: fixture)
+            let consumptionGate = AudioConsumptionGate()
+            let recorder = try makeRecorder(
+                fixture: fixture,
+                beforeConsumingChunk: { await consumptionGate.wait() }
+            )
             let writer = try await recorder.beginRange(
                 source: .microphone,
                 locale: Locale(identifier: "ja_JP"),
                 at: fixture.now
             )
             let buffer = try makeBuffer(format: recorder.targetFormat, frameCount: 1)
-            for _ in 0 ..< 300 {
+            writer.appendBuffer(buffer)
+            try await consumptionGate.waitUntilWaiting()
+            for _ in 1 ..< 300 {
                 writer.appendBuffer(buffer)
             }
             let acceptedPrefixFrameCount = writer.acceptedFrameCount
             #expect(acceptedPrefixFrameCount < 300)
 
-            _ = await writer.captureLocaleBoundary()
             for _ in 0 ..< 10 {
                 writer.appendBuffer(buffer)
             }
             #expect(writer.acceptedFrameCount == acceptedPrefixFrameCount)
 
+            await consumptionGate.open()
             await #expect(throws: RecordingAudioStoreError.writeQueueOverflow) {
                 try await recorder.finish()
             }
@@ -508,7 +549,8 @@ import GRDB
 
         private func makeRecorder(
             fixture: BatchAudioTestFixture,
-            configuration: RecordingAudioStore.Configuration = .production
+            configuration: RecordingAudioStore.Configuration = .production,
+            beforeConsumingChunk: SegmentedAudioSourceWriter.BeforeConsumingChunk? = nil
         ) throws -> BatchAudioRecordingSession {
             try BatchAudioRecordingSession(
                 dbQueue: fixture.database.dbQueue,
@@ -517,7 +559,8 @@ import GRDB
                 recordingSessionId: fixture.session.id,
                 recordingStartTime: fixture.now,
                 sampleRate: 16000,
-                configuration: configuration
+                configuration: configuration,
+                beforeConsumingChunk: beforeConsumingChunk
             )
         }
 
