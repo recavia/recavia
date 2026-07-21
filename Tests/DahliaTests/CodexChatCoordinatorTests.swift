@@ -243,14 +243,14 @@ import Foundation
 
         func send(
             threadID _: String,
-            textBlocks _: [String],
+            inputs _: [CodexAppServerInput],
             model _: String?,
             effort _: String
         ) async throws -> AsyncThrowingStream<CodexChatTurnEvent, any Error> {
             AsyncThrowingStream { $0.finish() }
         }
 
-        func steer(threadID _: String, turnID _: String, textBlocks _: [String]) async throws {}
+        func steer(threadID _: String, turnID _: String, inputs _: [CodexAppServerInput]) async throws {}
         func interrupt(threadID _: String, turnID _: String) async {}
         func unsubscribe(threadID _: String) async {}
 
@@ -309,15 +309,15 @@ import Foundation
 
         func send(
             threadID _: String,
-            textBlocks: [String],
+            inputs: [CodexAppServerInput],
             model _: String?,
             effort _: String
         ) async throws -> AsyncThrowingStream<CodexChatTurnEvent, any Error> {
-            sentTextBlocks.append(textBlocks)
+            sentTextBlocks.append(inputs.compactMap(\.textValue))
             return AsyncThrowingStream<CodexChatTurnEvent, any Error> { $0.finish() }
         }
 
-        func steer(threadID _: String, turnID _: String, textBlocks _: [String]) async throws {}
+        func steer(threadID _: String, turnID _: String, inputs _: [CodexAppServerInput]) async throws {}
         func interrupt(threadID _: String, turnID _: String) async {}
 
         func unsubscribe(threadID: String) async {

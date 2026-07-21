@@ -153,18 +153,13 @@ actor CodexChatService: CodexChatServicing {
 
     func send(
         threadID: String,
-        textBlocks: [String],
+        inputs: [CodexAppServerInput],
         model: String?,
         effort: String
     ) async throws -> AsyncThrowingStream<CodexChatTurnEvent, any Error> {
         var params: [String: JSONValue] = [
             "effort": .string(effort),
-            "input": .array(textBlocks.map { text in
-                .object([
-                    "type": .string("text"),
-                    "text": .string(text),
-                ])
-            }),
+            "input": .array(inputs.map(Self.jsonInput)),
             "summary": .string("auto"),
             "threadId": .string(threadID),
         ]
@@ -206,20 +201,24 @@ actor CodexChatService: CodexChatServicing {
         )
     }
 
-    func steer(threadID: String, turnID: String, textBlocks: [String]) async throws {
+    func steer(threadID: String, turnID: String, inputs: [CodexAppServerInput]) async throws {
         _ = try await appServer.request(
             method: "turn/steer",
             params: .object([
                 "expectedTurnId": .string(turnID),
-                "input": .array(textBlocks.map { text in
-                    .object([
-                        "type": .string("text"),
-                        "text": .string(text),
-                    ])
-                }),
+                "input": .array(inputs.map(Self.jsonInput)),
                 "threadId": .string(threadID),
             ])
         )
+    }
+
+    private nonisolated static func jsonInput(_ input: CodexAppServerInput) -> JSONValue {
+        switch input {
+        case let .text(text), let .imageMetadata(text):
+            .object(["type": .string("text"), "text": .string(text)])
+        case let .imageDataURI(uri):
+            .object(["type": .string("image"), "url": .string(uri)])
+        }
     }
 
     func interrupt(threadID: String, turnID: String) async {
@@ -329,20 +328,30 @@ private extension CodexChatService {
     }
 
     nonisolated static func parseUserMessages(_ object: [String: JSONValue], id: String) -> [CodexChatMessage] {
-        let textBlocks = object["content"]?.arrayValue?
+        guard let content = object["content"]?.arrayValue else { return [] }
+        let textBlocks = content
             .compactMap { input -> String? in
-                guard input.objectValue?["type"]?.stringValue == "text" else { return nil }
-                return input.objectValue?["text"]?.stringValue
+                guard let input = input.objectValue,
+                      input["type"]?.stringValue == "text" else { return nil }
+                return input["text"]?.stringValue
             }
-        guard let textBlocks, !textBlocks.isEmpty else { return [] }
+        var images: [CodexChatImageAttachment] = []
+        for input in content where images.count < CodexChatImageAttachment.maximumAttachmentCount {
+            guard let input = input.objectValue,
+                  input["type"]?.stringValue == "image",
+                  let dataURI = input["url"]?.stringValue,
+                  let image = CodexChatImageAttachment(dataURI: dataURI) else { continue }
+            images.append(image)
+        }
         let decoded = CodexChatPromptCodec.decodeTextBlocks(textBlocks)
-        guard decoded.text.nilIfBlank != nil else { return [] }
+        guard decoded.text.nilIfBlank != nil || !images.isEmpty else { return [] }
         return [
             CodexChatMessage(
                 id: id,
                 role: .user,
                 text: decoded.text,
-                context: decoded.context
+                context: decoded.context,
+                images: images
             ),
         ]
     }

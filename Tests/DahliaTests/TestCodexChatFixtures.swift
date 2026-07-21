@@ -17,6 +17,16 @@ enum TestCodexChatFixtures {
     </context>Question
     """
 
+    nonisolated static let historyImageDataURI =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl2sAAAAASUVORK5CYII="
+
+    private nonisolated static var historyImageInput: JSONValue {
+        .object([
+            "type": .string("image"),
+            "url": .string(historyImageDataURI),
+        ])
+    }
+
     nonisolated static var modelList: JSONValue {
         .object([
             "data": .array([
@@ -62,7 +72,13 @@ enum TestCodexChatFixtures {
                                     "type": .string("text"),
                                     "text": .string(historyUserPrompt),
                                 ]),
+                                historyImageInput,
                             ]),
+                        ]),
+                        .object([
+                            "id": .string("user-image-only"),
+                            "type": .string("userMessage"),
+                            "content": .array([historyImageInput]),
                         ]),
                         .object([
                             "id": .string("agent-1"),

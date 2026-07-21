@@ -21,7 +21,7 @@ import Foundation
             let thread = try await service.startThread(model: "default-model", effort: "medium", vaultID: vaultID)
             let stream = try await service.send(
                 threadID: thread.id,
-                textBlocks: ["Meeting context", "Hi"],
+                inputs: [.text("Meeting context"), .text("Hi")],
                 model: "default-model",
                 effort: "high"
             )
@@ -99,10 +99,11 @@ import Foundation
                 workspaceLocator: TestCodexChatWorkspaceLocator(url: URL(filePath: "/tmp/dahlia-chat-tests"))
             )
 
+            let dataURI = TestCodexChatFixtures.historyImageDataURI
             try await service.steer(
                 threadID: "thread-1",
                 turnID: "turn-1",
-                textBlocks: ["Live context", "New instruction"]
+                inputs: [.text("Live context"), .imageDataURI(dataURI)]
             )
 
             let params = try #require(await transport.messages().first {
@@ -116,10 +117,42 @@ import Foundation
                     "text": .string("Live context"),
                 ]),
                 .object([
-                    "type": .string("text"),
-                    "text": .string("New instruction"),
+                    "type": .string("image"),
+                    "url": .string(dataURI),
                 ]),
             ]))
+            await appServer.shutdown()
+        }
+
+        @Test
+        func imageInputsAreSentAndRestoredFromHistory() async throws {
+            let transport = TestCodexChatAppServerTransport()
+            let appServer = CodexAppServerService(transportFactory: { transport })
+            let service = CodexChatService(
+                appServer: appServer,
+                workspaceLocator: TestCodexChatWorkspaceLocator(url: URL(filePath: "/tmp/dahlia-chat-images"))
+            )
+            let dataURI = TestCodexChatFixtures.historyImageDataURI
+
+            _ = try await service.send(
+                threadID: "thread-1",
+                inputs: [.text("Describe this"), .imageDataURI(dataURI)],
+                model: "default-model",
+                effort: "medium"
+            )
+            let params = try #require(await transport.messages().first {
+                $0.objectValue?["method"]?.stringValue == "turn/start"
+            }?.objectValue?["params"]?.objectValue)
+            #expect(params["input"] == .array([
+                .object(["type": .string("text"), "text": .string("Describe this")]),
+                .object(["type": .string("image"), "url": .string(dataURI)]),
+            ]))
+
+            let loaded = try await service.loadThread(id: "thread-history")
+            #expect(loaded.messages[0].images.count == 1)
+            #expect(loaded.messages[0].images[0].dataURI == dataURI)
+            #expect(loaded.messages[1].text.isEmpty)
+            #expect(loaded.messages[1].images.count == 1)
             await appServer.shutdown()
         }
 
@@ -150,7 +183,7 @@ import Foundation
             )
             let stream = try await service.send(
                 threadID: "thread-1",
-                textBlocks: ["Disconnect"],
+                inputs: [.text("Disconnect")],
                 model: "default-model",
                 effort: "medium"
             )
@@ -183,9 +216,9 @@ import Foundation
 
             #expect(page.threads.map(\.id) == ["thread-history"])
             #expect(page.nextCursor == "next-page")
-            #expect(loaded.messages.map(\.text) == ["Question", "Answer", ""])
-            #expect(loaded.messages[1].reasoning == "Reviewed the question\n\nPrepared the answer")
-            #expect(loaded.messages[2].reasoning == "Reasoning without an answer")
+            #expect(loaded.messages.map(\.text) == ["Question", "", "Answer", ""])
+            #expect(loaded.messages[2].reasoning == "Reviewed the question\n\nPrepared the answer")
+            #expect(loaded.messages[3].reasoning == "Reasoning without an answer")
             #expect(resumed.model == "default-model")
             #expect(resumed.reasoningEffort == "high")
             guard case let .meeting(meetingID, meetingName, calendarEvent) = loaded.messages[0].context else {
@@ -221,7 +254,7 @@ import Foundation
             )
             let stream = try await service.send(
                 threadID: "thread-1",
-                textBlocks: ["Test"],
+                inputs: [.text("Test")],
                 model: "default-model",
                 effort: "medium"
             )

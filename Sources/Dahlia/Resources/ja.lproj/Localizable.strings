@@ -763,6 +763,17 @@
 "Stop generating" = "生成を停止";
 "Thinking" = "考えています";
 "Message Codex" = "Codex にメッセージ";
+"Add to chat" = "チャットに追加";
+"Image" = "画像";
+"Attach images" = "画像を添付";
+"Attached image" = "添付画像";
+"Attached images" = "添付画像";
+"Image unavailable" = "画像を表示できません";
+"Remove attached image" = "添付画像を削除";
+"Preparing images…" = "画像を準備中…";
+"The selected model does not support images. Choose another model or remove the images." = "選択したモデルは画像に対応していません。別のモデルを選択するか、画像を削除してください。";
+"You can attach up to %lld images." = "画像は最大 %lld 枚まで添付できます。";
+"Could not attach %lld image(s)." = "%lld 枚の画像を添付できませんでした。";
 "Live mode" = "ライブモード";
 "Turn on live mode" = "ライブモードをオンにする";
 "Turn off live mode" = "ライブモードをオフにする";

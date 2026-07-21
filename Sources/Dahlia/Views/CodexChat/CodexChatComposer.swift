@@ -1,16 +1,27 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct CodexChatComposer: View {
     @Bindable var session: CodexChatSessionModel
-    @State private var isMeetingPickerPresented = false
+    @State private var showsMeetingPicker = false
     @State private var meetingQuery = ""
     @State private var highlightedMeetingID: UUID?
     @State private var suggestions: [CodexChatMeetingReference] = []
     @State private var consumesTrailingMentionOnSelection = false
+    @State private var isImageImporterPresented = false
+    @State private var isImageDropTargeted = false
+    @State private var showsAddPanel = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 6) {
+            if !session.attachedImages.isEmpty {
+                CodexChatAttachmentStrip(
+                    attachments: session.attachedImages,
+                    onRemove: session.removeAttachedImage
+                )
+            }
+
             if !session.selectedMeetingReferenceIDs.isEmpty {
                 CodexChatMeetingReferenceBar(
                     referenceIDs: session.selectedMeetingReferenceIDs,
@@ -19,70 +30,30 @@ struct CodexChatComposer: View {
                 )
             }
 
-            HStack(alignment: .bottom, spacing: 10) {
-                Button(L10n.addMeetingReference, systemImage: "plus", action: showMeetingPicker)
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .frame(width: CodexChatDesign.controlSize, height: CodexChatDesign.controlSize)
-                    .background(.quaternary, in: Circle())
-                    .contentShape(Circle())
-                    .help(L10n.addMeetingReference)
-                    .popover(isPresented: $isMeetingPickerPresented, arrowEdge: .top) {
-                        CodexChatMeetingPicker(
-                            references: suggestions,
-                            highlightedID: highlightedMeetingID,
-                            onSelect: selectMeeting
-                        )
-                    }
-
-                TextField(L10n.messageCodex, text: $session.draft, axis: .vertical)
-                    .font(.body)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1 ... 5)
-                    .padding(.leading, 8)
-                    .padding(.vertical, 6)
-                    .contentShape(.rect)
-                    .onContinuousHover(perform: updateTextInputCursor)
-                    .accessibilityLabel(L10n.messageCodex)
-                    .onSubmit(handleSubmit)
-                    .onMoveCommand(perform: handleMoveCommand)
-                    .onExitCommand(perform: closeMeetingPicker)
-
-                if session.isLoading, session.models.isEmpty {
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(width: CodexChatDesign.controlSize, height: CodexChatDesign.controlSize)
-                        .accessibilityLabel(L10n.chatModelLoading)
-                } else if !session.models.isEmpty {
-                    CodexChatConfigurationButton(session: session)
-                }
-
-                if session.isGenerating, !session.canSend {
-                    CodexChatActionButton(
-                        label: L10n.stopGenerating,
-                        systemImage: "stop.fill",
-                        isEnabled: true,
-                        action: session.stop
-                    )
-                } else {
-                    CodexChatActionButton(
-                        label: L10n.sendMessage,
-                        systemImage: "arrow.up",
-                        isEnabled: session.canSend,
-                        action: session.sendDraft
-                    )
-                }
+            if let validationMessage = session.attachmentValidationMessage {
+                CodexChatAttachmentValidationView(message: validationMessage)
             }
+
+            CodexChatComposerInputRow(
+                session: session,
+                showsAddPanel: showsAddPanel,
+                showsMeetingPicker: showsMeetingPicker,
+                suggestions: suggestions,
+                highlightedMeetingID: highlightedMeetingID,
+                onShowImageImporter: showImageImporter,
+                onToggleAddPanel: toggleAddPanel,
+                onShowMeetingPicker: showMeetingPicker,
+                onSelectMeeting: selectMeeting,
+                onPasteImages: pasteImages,
+                onSubmit: handleSubmit,
+                onMoveCommand: handleMoveCommand,
+                onExitCommand: dismissAddPanel,
+                onHover: updateTextInputCursor
+            )
         }
         .padding(6)
         .background {
-            RoundedRectangle(cornerRadius: CodexChatDesign.composerCornerRadius)
-                .fill(.background)
-                .overlay {
-                    RoundedRectangle(cornerRadius: CodexChatDesign.composerCornerRadius)
-                        .stroke(.separator.opacity(0.55), lineWidth: 1)
-                }
+            CodexChatComposerBackground(isDropTargeted: isImageDropTargeted)
         }
         .shadow(color: .black.opacity(0.05), radius: 12, y: 3)
         .onChange(of: session.draft, handleDraftChange)
@@ -92,10 +63,71 @@ struct CodexChatComposer: View {
         .onChange(of: session.selectedMeetingReferenceIDs) {
             refreshSuggestionsIfPresented()
         }
+        .fileImporter(
+            isPresented: $isImageImporterPresented,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: true,
+            onCompletion: handleImageImport
+        )
+        .dropDestination(for: CodexChatTransferImage.self) { images, _ in
+            addTransferImages(images)
+        }
+        .onDropSessionUpdated(updateDropTarget)
+        .pasteDestination(for: CodexChatTransferImage.self, action: addTransferImages)
+    }
+
+    private func showImageImporter() {
+        dismissAddPanel()
+        isImageImporterPresented = true
+    }
+
+    private func toggleAddPanel() {
+        guard !showsAddPanel else {
+            dismissAddPanel()
+            return
+        }
+        meetingQuery = ""
+        highlightedMeetingID = nil
+        consumesTrailingMentionOnSelection = false
+        showsMeetingPicker = false
+        showsAddPanel = true
+    }
+
+    private func handleImageImport(_ result: Result<[URL], any Error>) {
+        switch result {
+        case let .success(urls):
+            Task { await session.addImageURLs(urls) }
+        case let .failure(error):
+            let cocoaError = error as NSError
+            guard cocoaError.domain != NSCocoaErrorDomain || cocoaError.code != NSUserCancelledError else { return }
+            session.reportImageAttachmentFailure()
+        }
+    }
+
+    private func addTransferImages(_ images: [CodexChatTransferImage]) {
+        Task { await session.addImageData(images.map(\.data)) }
+    }
+
+    private func pasteImages() -> Bool {
+        let imageData = CodexChatPasteboardImageReader.imageData()
+        guard !imageData.isEmpty else { return false }
+        Task { await session.addImageData(imageData) }
+        return true
+    }
+
+    private func updateDropTarget(_ dropSession: DropSession) {
+        switch dropSession.phase {
+        case .entering, .active:
+            isImageDropTargeted = true
+        case .exiting, .ended, .dataTransferCompleted:
+            isImageDropTargeted = false
+        @unknown default:
+            isImageDropTargeted = false
+        }
     }
 
     private func handleSubmit() {
-        if isMeetingPickerPresented,
+        if showsMeetingPicker,
            let highlightedMeetingID,
            let reference = suggestions.first(where: { $0.id == highlightedMeetingID }) {
             selectMeeting(reference)
@@ -116,26 +148,29 @@ struct CodexChatComposer: View {
 
     private func handleDraftChange(_: String, _ newValue: String) {
         guard let query = CodexChatMeetingReference.trailingMentionQuery(in: newValue) else {
-            if isMeetingPickerPresented {
-                closeMeetingPicker()
+            if showsMeetingPicker {
+                dismissAddPanel()
             }
             return
         }
         meetingQuery = query
         consumesTrailingMentionOnSelection = true
-        isMeetingPickerPresented = true
+        showsMeetingPicker = true
+        showsAddPanel = true
         refreshSuggestions()
     }
 
     private func showMeetingPicker() {
         meetingQuery = ""
         consumesTrailingMentionOnSelection = false
-        isMeetingPickerPresented = true
+        showsMeetingPicker = true
+        showsAddPanel = true
         refreshSuggestions()
     }
 
-    private func closeMeetingPicker() {
-        isMeetingPickerPresented = false
+    private func dismissAddPanel() {
+        showsAddPanel = false
+        showsMeetingPicker = false
         meetingQuery = ""
         highlightedMeetingID = nil
         consumesTrailingMentionOnSelection = false
@@ -147,11 +182,11 @@ struct CodexChatComposer: View {
             consumesTrailingMention: consumesTrailingMentionOnSelection
         )
         session.addMeetingReference(reference)
-        closeMeetingPicker()
+        dismissAddPanel()
     }
 
     private func refreshSuggestionsIfPresented() {
-        guard isMeetingPickerPresented else { return }
+        guard showsMeetingPicker else { return }
         refreshSuggestions()
     }
 
@@ -170,7 +205,7 @@ struct CodexChatComposer: View {
     }
 
     private func handleMoveCommand(_ direction: MoveCommandDirection) {
-        guard isMeetingPickerPresented, !suggestions.isEmpty else { return }
+        guard showsMeetingPicker, !suggestions.isEmpty else { return }
         switch direction {
         case .up:
             highlightedMeetingID = CodexChatMeetingPickerSelection.moving(

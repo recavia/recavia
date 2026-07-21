@@ -9,11 +9,11 @@ protocol CodexChatServicing: Sendable {
     func setThreadName(threadID: String, name: String) async
     func send(
         threadID: String,
-        textBlocks: [String],
+        inputs: [CodexAppServerInput],
         model: String?,
         effort: String
     ) async throws -> AsyncThrowingStream<CodexChatTurnEvent, any Error>
-    func steer(threadID: String, turnID: String, textBlocks: [String]) async throws
+    func steer(threadID: String, turnID: String, inputs: [CodexAppServerInput]) async throws
     func interrupt(threadID: String, turnID: String) async
     func unsubscribe(threadID: String) async
 }
