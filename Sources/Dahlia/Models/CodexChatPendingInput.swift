@@ -1,5 +1,5 @@
 enum CodexChatPendingInput {
-    case manual(String)
+    case manual(CodexChatManualSubmission)
     case liveTranscript(String, wasTruncated: Bool)
 
     var isLiveTranscript: Bool {
@@ -9,9 +9,9 @@ enum CodexChatPendingInput {
         return false
     }
 
-    var manualText: String? {
-        guard case let .manual(text) = self else { return nil }
-        return text
+    var manualSubmission: CodexChatManualSubmission? {
+        guard case let .manual(submission) = self else { return nil }
+        return submission
     }
 
     var liveTranscript: String? {

@@ -1,6 +1,6 @@
 import Foundation
 
-enum CodexAppServerInput {
+enum CodexAppServerInput: Equatable, Sendable {
     case text(String)
     case imageMetadata(String)
     case imageDataURI(String)
@@ -13,6 +13,13 @@ enum CodexAppServerInput {
         switch self {
         case .imageMetadata, .imageDataURI: true
         case .text: false
+        }
+    }
+
+    var textValue: String? {
+        switch self {
+        case let .text(text), let .imageMetadata(text): text
+        case .imageDataURI: nil
         }
     }
 }

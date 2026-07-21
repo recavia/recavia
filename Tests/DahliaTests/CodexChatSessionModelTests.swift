@@ -788,10 +788,11 @@ import Foundation
 
         func send(
             threadID _: String,
-            textBlocks: [String],
+            inputs: [CodexAppServerInput],
             model _: String?,
             effort _: String
         ) async throws -> AsyncThrowingStream<CodexChatTurnEvent, any Error> {
+            let textBlocks = inputs.compactMap(\.textValue)
             sentTextBlocks.append(textBlocks)
             if mode == .delayFirstSendIgnoringCancellation, sentTextBlocks.count == 1 {
                 await withCheckedContinuation { continuation in
@@ -857,7 +858,8 @@ import Foundation
             blockedContinuation = nil
         }
 
-        func steer(threadID _: String, turnID _: String, textBlocks: [String]) async throws {
+        func steer(threadID _: String, turnID _: String, inputs: [CodexAppServerInput]) async throws {
+            let textBlocks = inputs.compactMap(\.textValue)
             steeredTextBlocks.append(textBlocks)
             if !steerErrors.isEmpty {
                 throw steerErrors.removeFirst()

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct CodexChatComposer: View {
     @Bindable var session: CodexChatSessionModel
@@ -8,6 +9,8 @@ struct CodexChatComposer: View {
     @State private var highlightedMeetingID: UUID?
     @State private var suggestions: [CodexChatMeetingReference] = []
     @State private var consumesTrailingMentionOnSelection = false
+    @State private var isImageImporterPresented = false
+    @State private var isImageDropTargeted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -19,70 +22,34 @@ struct CodexChatComposer: View {
                 )
             }
 
-            HStack(alignment: .bottom, spacing: 10) {
-                Button(L10n.addMeetingReference, systemImage: "plus", action: showMeetingPicker)
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .frame(width: CodexChatDesign.controlSize, height: CodexChatDesign.controlSize)
-                    .background(.quaternary, in: Circle())
-                    .contentShape(Circle())
-                    .help(L10n.addMeetingReference)
-                    .popover(isPresented: $isMeetingPickerPresented, arrowEdge: .top) {
-                        CodexChatMeetingPicker(
-                            references: suggestions,
-                            highlightedID: highlightedMeetingID,
-                            onSelect: selectMeeting
-                        )
-                    }
-
-                TextField(L10n.messageCodex, text: $session.draft, axis: .vertical)
-                    .font(.body)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1 ... 5)
-                    .padding(.leading, 8)
-                    .padding(.vertical, 6)
-                    .contentShape(.rect)
-                    .onContinuousHover(perform: updateTextInputCursor)
-                    .accessibilityLabel(L10n.messageCodex)
-                    .onSubmit(handleSubmit)
-                    .onMoveCommand(perform: handleMoveCommand)
-                    .onExitCommand(perform: closeMeetingPicker)
-
-                if session.isLoading, session.models.isEmpty {
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(width: CodexChatDesign.controlSize, height: CodexChatDesign.controlSize)
-                        .accessibilityLabel(L10n.chatModelLoading)
-                } else if !session.models.isEmpty {
-                    CodexChatConfigurationButton(session: session)
-                }
-
-                if session.isGenerating, !session.canSend {
-                    CodexChatActionButton(
-                        label: L10n.stopGenerating,
-                        systemImage: "stop.fill",
-                        isEnabled: true,
-                        action: session.stop
-                    )
-                } else {
-                    CodexChatActionButton(
-                        label: L10n.sendMessage,
-                        systemImage: "arrow.up",
-                        isEnabled: session.canSend,
-                        action: session.sendDraft
-                    )
-                }
+            if !session.attachedImages.isEmpty {
+                CodexChatAttachmentStrip(
+                    attachments: session.attachedImages,
+                    onRemove: session.removeAttachedImage
+                )
             }
+
+            if let validationMessage = session.attachmentValidationMessage {
+                CodexChatAttachmentValidationView(message: validationMessage)
+            }
+
+            CodexChatComposerInputRow(
+                session: session,
+                isMeetingPickerPresented: $isMeetingPickerPresented,
+                suggestions: suggestions,
+                highlightedMeetingID: highlightedMeetingID,
+                onShowImageImporter: showImageImporter,
+                onShowMeetingPicker: showMeetingPicker,
+                onSelectMeeting: selectMeeting,
+                onSubmit: handleSubmit,
+                onMoveCommand: handleMoveCommand,
+                onExitCommand: closeMeetingPicker,
+                onHover: updateTextInputCursor
+            )
         }
         .padding(6)
         .background {
-            RoundedRectangle(cornerRadius: CodexChatDesign.composerCornerRadius)
-                .fill(.background)
-                .overlay {
-                    RoundedRectangle(cornerRadius: CodexChatDesign.composerCornerRadius)
-                        .stroke(.separator.opacity(0.55), lineWidth: 1)
-                }
+            CodexChatComposerBackground(isDropTargeted: isImageDropTargeted)
         }
         .shadow(color: .black.opacity(0.05), radius: 12, y: 3)
         .onChange(of: session.draft, handleDraftChange)
@@ -91,6 +58,47 @@ struct CodexChatComposer: View {
         }
         .onChange(of: session.selectedMeetingReferenceIDs) {
             refreshSuggestionsIfPresented()
+        }
+        .fileImporter(
+            isPresented: $isImageImporterPresented,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: true,
+            onCompletion: handleImageImport
+        )
+        .dropDestination(for: CodexChatTransferImage.self) { images, _ in
+            addTransferImages(images)
+        }
+        .onDropSessionUpdated(updateDropTarget)
+        .pasteDestination(for: CodexChatTransferImage.self, action: addTransferImages)
+    }
+
+    private func showImageImporter() {
+        isImageImporterPresented = true
+    }
+
+    private func handleImageImport(_ result: Result<[URL], any Error>) {
+        switch result {
+        case let .success(urls):
+            Task { await session.addImageURLs(urls) }
+        case let .failure(error):
+            let cocoaError = error as NSError
+            guard cocoaError.domain != NSCocoaErrorDomain || cocoaError.code != NSUserCancelledError else { return }
+            session.reportImageAttachmentFailure()
+        }
+    }
+
+    private func addTransferImages(_ images: [CodexChatTransferImage]) {
+        Task { await session.addImageData(images.map(\.data)) }
+    }
+
+    private func updateDropTarget(_ dropSession: DropSession) {
+        switch dropSession.phase {
+        case .entering, .active:
+            isImageDropTargeted = true
+        case .exiting, .ended, .dataTransferCompleted:
+            isImageDropTargeted = false
+        @unknown default:
+            isImageDropTargeted = false
         }
     }
 

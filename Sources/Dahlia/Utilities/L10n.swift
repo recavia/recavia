@@ -1525,6 +1525,25 @@ enum L10n {
     static var stopGenerating: String { String(localized: "Stop generating", bundle: bundle) }
     static var chatThinking: String { String(localized: "Thinking", bundle: bundle) }
     static var messageCodex: String { String(localized: "Message Codex", bundle: bundle) }
+    static var chatImage: String { String(localized: "Image", bundle: bundle) }
+    static var attachChatImages: String { String(localized: "Attach images", bundle: bundle) }
+    static var chatAttachedImage: String { String(localized: "Attached image", bundle: bundle) }
+    static var chatAttachedImages: String { String(localized: "Attached images", bundle: bundle) }
+    static var chatImageUnavailable: String { String(localized: "Image unavailable", bundle: bundle) }
+    static var removeChatAttachedImage: String { String(localized: "Remove attached image", bundle: bundle) }
+    static var chatPreparingImages: String { String(localized: "Preparing images…", bundle: bundle) }
+    static var chatModelDoesNotSupportImages: String {
+        String(localized: "The selected model does not support images. Choose another model or remove the images.", bundle: bundle)
+    }
+
+    static func chatImageLimitReached(_ count: Int) -> String {
+        String(localized: "You can attach up to \(count) images.", bundle: bundle)
+    }
+
+    static func chatImagesUnavailable(_ count: Int) -> String {
+        String(localized: "Could not attach \(count) image(s).", bundle: bundle)
+    }
+
     static var chatLiveMode: String { String(localized: "Live mode", bundle: bundle) }
     static var enableChatLiveMode: String { String(localized: "Turn on live mode", bundle: bundle) }
     static var disableChatLiveMode: String { String(localized: "Turn off live mode", bundle: bundle) }

@@ -18,6 +18,7 @@ struct CodexChatMessageRow: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     CodexChatUserMessageContent(
                         rawText: visibleText,
+                        images: message.images,
                         meetingNamesByID: meetingNamesByID,
                         meetingReferencesByID: meetingReferencesByID
                     )
@@ -25,7 +26,9 @@ struct CodexChatMessageRow: View {
                     .padding(.vertical, 8)
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
 
-                    CodexChatCopyButton(text: displayText)
+                    if !displayText.isEmpty {
+                        CodexChatCopyButton(text: displayText)
+                    }
                 }
             } else {
                 VStack(alignment: .leading, spacing: 10) {

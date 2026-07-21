@@ -763,6 +763,16 @@
 "Stop generating" = "Stop generating";
 "Thinking" = "Thinking";
 "Message Codex" = "Message Codex";
+"Image" = "Image";
+"Attach images" = "Attach images";
+"Attached image" = "Attached image";
+"Attached images" = "Attached images";
+"Image unavailable" = "Image unavailable";
+"Remove attached image" = "Remove attached image";
+"Preparing images…" = "Preparing images…";
+"The selected model does not support images. Choose another model or remove the images." = "The selected model does not support images. Choose another model or remove the images.";
+"You can attach up to %lld images." = "You can attach up to %lld images.";
+"Could not attach %lld image(s)." = "Could not attach %lld image(s).";
 "Live mode" = "Live mode";
 "Turn on live mode" = "Turn on live mode";
 "Turn off live mode" = "Turn off live mode";
