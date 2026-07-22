@@ -201,7 +201,13 @@ final class CaptionViewModel: ObservableObject {
     // MARK: - Screenshot State
 
     @Published var screenshots: [MeetingScreenshotRecord] = []
-    @Published private(set) var isDeletingScreenshots = false
+    @Published private(set) var isDeletingScreenshots = false {
+        didSet {
+            guard oldValue, !isDeletingScreenshots else { return }
+            generatePendingBatchSummariesIfReady()
+        }
+    }
+
     /// キャプチャ対象として選択可能なウィンドウ一覧。
     @Published var availableWindows: [ScreenshotWindowOption] = []
     /// スクリーンショット取得対象。未設定の場合はキャプチャしない。
@@ -843,7 +849,9 @@ final class CaptionViewModel: ObservableObject {
             batchTranscriptionState = update.state
         }
         guard case let .completed(sessionID) = update.state else { return }
-        completedBatchSummarySessionIDs.insert(sessionID)
+        if pendingBatchSummaryRequestsBySessionId[sessionID] != nil {
+            completedBatchSummarySessionIDs.insert(sessionID)
+        }
         if isVisibleMeeting, canReloadMeetingAfterBatchCompletion(update.meetingId) {
             await reloadCurrentMeetingAfterBatchCompletion(meetingId: update.meetingId)
         }
@@ -2452,6 +2460,11 @@ final class CaptionViewModel: ObservableObject {
         let options: SummaryGenerationOptions
         let dbQueue: DatabaseQueue
         let vaultURL: URL
+
+        func hasSamePersistenceContext(as other: Self) -> Bool {
+            dbQueue === other.dbQueue
+                && vaultURL.standardizedFileURL == other.vaultURL.standardizedFileURL
+        }
     }
 
     private enum SummaryGenerationPreparationError: LocalizedError {
@@ -2518,6 +2531,14 @@ final class CaptionViewModel: ObservableObject {
                 options: options
             )
             batchSummaryContextsBySessionId.removeValue(forKey: sessionID)
+        }
+
+        var completedBatchSummarySessionCountForTesting: Int {
+            completedBatchSummarySessionIDs.count
+        }
+
+        func setScreenshotDeletionInProgressForTesting(_ isInProgress: Bool) {
+            isDeletingScreenshots = isInProgress
         }
     #endif
 
@@ -2599,13 +2620,19 @@ final class CaptionViewModel: ObservableObject {
     }
 
     private func generatePendingBatchSummaryIfReady(meetingId: UUID) {
-        guard !isSummaryGenerating(meetingId: meetingId) else { return }
-        let pendingRequests = pendingBatchSummaryRequestsBySessionId.compactMap { sessionId, request in
+        guard !isDeletingScreenshots,
+              !isSummaryGenerating(meetingId: meetingId) else { return }
+        let completedRequests = pendingBatchSummaryRequestsBySessionId.compactMap { sessionId, request in
             request.meetingId == meetingId && completedBatchSummarySessionIDs.contains(sessionId)
                 ? (sessionId: sessionId, request: request)
                 : nil
         }
-        guard let first = pendingRequests.first else { return }
+        .sorted { $0.sessionId.uuidString < $1.sessionId.uuidString }
+        guard let first = completedRequests.first else { return }
+        let pendingRequests = completedRequests.filter {
+            $0.request.hasSamePersistenceContext(as: first.request)
+        }
+        let sessionIDs = pendingRequests.map(\.sessionId)
         let options = SummaryGenerationOptions.merging(pendingRequests.map(\.request.options))
         do {
             let request = try makePersistedSummaryRequest(
@@ -2614,21 +2641,30 @@ final class CaptionViewModel: ObservableObject {
                 vaultURL: first.request.vaultURL,
                 options: options
             )
-            for pending in pendingRequests {
-                pendingBatchSummaryRequestsBySessionId.removeValue(forKey: pending.sessionId)
-                completedBatchSummarySessionIDs.remove(pending.sessionId)
-            }
+            removePendingBatchSummaryRequests(sessionIDs: sessionIDs)
             startSummaryGeneration(request)
         } catch {
-            for pending in pendingRequests {
-                pendingBatchSummaryRequestsBySessionId.removeValue(forKey: pending.sessionId)
-                completedBatchSummarySessionIDs.remove(pending.sessionId)
-            }
+            removePendingBatchSummaryRequests(sessionIDs: sessionIDs)
             recordSummaryPreparationFailure(
                 error.localizedDescription,
                 meetingId: meetingId,
                 dbQueue: first.request.dbQueue
             )
+            generatePendingBatchSummaryIfReady(meetingId: meetingId)
+        }
+    }
+
+    private func generatePendingBatchSummariesIfReady() {
+        let meetingIDs = Set(pendingBatchSummaryRequestsBySessionId.values.map(\.meetingId))
+        for meetingID in meetingIDs.sorted(by: { $0.uuidString < $1.uuidString }) {
+            generatePendingBatchSummaryIfReady(meetingId: meetingID)
+        }
+    }
+
+    private func removePendingBatchSummaryRequests(sessionIDs: [UUID]) {
+        for sessionID in sessionIDs {
+            pendingBatchSummaryRequestsBySessionId.removeValue(forKey: sessionID)
+            completedBatchSummarySessionIDs.remove(sessionID)
         }
     }
 

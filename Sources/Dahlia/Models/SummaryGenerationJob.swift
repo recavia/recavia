@@ -19,10 +19,6 @@ final class SummaryGenerationJob: Identifiable {
         stepStatuses.contains(where: \.isFailed)
     }
 
-    var failureMessages: [String] {
-        stepStatuses.compactMap(\.failureMessage)
-    }
-
     var isFinished: Bool {
         stepStatuses.allSatisfy(\.isTerminal)
     }

@@ -24,15 +24,17 @@
             let second = SummaryGenerationJob(meetingId: .v7(), meetingName: "Review")
 
             first.progress.summaryGeneration = .failed("offline")
-            first.progress.vaultExport = .skipped
-            first.progress.googleDocsExport = .skipped
+            first.progress.vaultExport = .failed("offline")
+            first.progress.googleDocsExport = .failed("offline")
             second.progress.summaryGeneration = .running
 
             #expect(first.hasFailure)
             #expect(first.isFinished)
-            #expect(first.failureMessages == ["offline"])
+            #expect(first.progress.summaryGeneration.failureMessage == "offline")
+            #expect(first.progress.vaultExport.failureMessage == "offline")
+            #expect(first.progress.googleDocsExport.failureMessage == "offline")
             #expect(!second.hasFailure)
-            #expect(second.failureMessages.isEmpty)
+            #expect(second.progress.summaryGeneration.failureMessage == nil)
         }
     }
 #endif

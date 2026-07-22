@@ -56,12 +56,6 @@ private struct SummaryGenerationJobProgressView: View {
             if !job.progress.googleDocsExport.isSkipped {
                 SummaryProgressStepRow(label: L10n.exportBatchSummaryToGoogleDocs, status: job.progress.googleDocsExport)
             }
-            ForEach(Array(Set(job.failureMessages)).sorted(), id: \.self) { message in
-                Text(message)
-                    .font(.caption2)
-                    .foregroundStyle(.red)
-                    .lineLimit(2)
-            }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -229,6 +229,116 @@ import GRDB
         }
 
         @Test
+        func pendingAutomaticRequestsKeepDifferentPersistenceContextsSeparate() async throws {
+            let original = try SummaryGenerationFixture()
+            let destination = try SummaryGenerationFixture()
+            defer {
+                original.removeFiles()
+                destination.removeFiles()
+            }
+            try destination.insertMeeting(
+                id: original.first.id,
+                name: "Moved",
+                transcript: "moved transcript"
+            )
+            let runner = BlockingSummaryRunner()
+            let viewModel = CaptionViewModel(summaryGenerationRunner: runner.run)
+            let options = SummaryGenerationOptions(
+                previousMeetingCount: 0,
+                exportOptions: SummaryExportOptions(exportsToVault: false, exportsToGoogleDocs: false)
+            )
+            let originalSessionID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000001"))
+            let destinationSessionID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000002"))
+
+            await original.select(original.first, in: viewModel, note: "manual")
+            viewModel.triggerManualSummary(options: options)
+            await runner.waitForCallCount(1)
+
+            viewModel.registerPendingBatchSummaryForTesting(
+                sessionID: originalSessionID,
+                meetingID: original.first.id,
+                options: options,
+                dbQueue: original.database.dbQueue,
+                vaultURL: original.vaultURL
+            )
+            viewModel.registerPendingBatchSummaryForTesting(
+                sessionID: destinationSessionID,
+                meetingID: original.first.id,
+                options: options,
+                dbQueue: destination.database.dbQueue,
+                vaultURL: destination.vaultURL
+            )
+            await viewModel.handleBatchTranscriptionUpdate(.init(
+                meetingId: original.first.id,
+                state: .completed(sessionId: originalSessionID)
+            ))
+            await viewModel.handleBatchTranscriptionUpdate(.init(
+                meetingId: original.first.id,
+                state: .completed(sessionId: destinationSessionID)
+            ))
+
+            runner.complete(meetingID: original.first.id, title: "Manual")
+            await runner.waitForCallCount(2)
+            runner.complete(meetingID: original.first.id, title: "Original context")
+            await runner.waitForCallCount(3)
+
+            #expect(try original.summary(for: original.first.id)?.loadDocument().title == "Original context")
+            #expect(try destination.summary(for: original.first.id) == nil)
+
+            runner.complete(meetingID: original.first.id, title: "Destination context")
+            #expect(await waitUntil { !viewModel.isSummaryGenerating(meetingId: original.first.id) })
+            #expect(try original.summary(for: original.first.id)?.loadDocument().title == "Original context")
+            #expect(try destination.summary(for: original.first.id)?.loadDocument().title == "Destination context")
+        }
+
+        @Test
+        func completedBatchWithoutSummaryRequestDoesNotRetainSessionID() async {
+            let viewModel = CaptionViewModel()
+
+            await viewModel.handleBatchTranscriptionUpdate(.init(
+                meetingId: .v7(),
+                state: .completed(sessionId: .v7())
+            ))
+
+            #expect(viewModel.completedBatchSummarySessionCountForTesting == 0)
+        }
+
+        @Test
+        func automaticSummaryWaitsUntilScreenshotDeletionFinishes() async throws {
+            let fixture = try SummaryGenerationFixture()
+            defer { fixture.removeFiles() }
+            let runner = BlockingSummaryRunner()
+            let viewModel = CaptionViewModel(summaryGenerationRunner: runner.run)
+            let sessionID = UUID.v7()
+            let options = SummaryGenerationOptions(
+                previousMeetingCount: 0,
+                exportOptions: SummaryExportOptions(exportsToVault: false, exportsToGoogleDocs: false)
+            )
+            viewModel.registerPendingBatchSummaryForTesting(
+                sessionID: sessionID,
+                meetingID: fixture.first.id,
+                options: options,
+                dbQueue: fixture.database.dbQueue,
+                vaultURL: fixture.vaultURL
+            )
+            viewModel.setScreenshotDeletionInProgressForTesting(true)
+
+            await viewModel.handleBatchTranscriptionUpdate(.init(
+                meetingId: fixture.first.id,
+                state: .completed(sessionId: sessionID)
+            ))
+
+            #expect(runner.calls.isEmpty)
+            #expect(viewModel.completedBatchSummarySessionCountForTesting == 1)
+
+            viewModel.setScreenshotDeletionInProgressForTesting(false)
+            await runner.waitForCallCount(1)
+            runner.complete(meetingID: fixture.first.id, title: "After deletion")
+            #expect(await waitUntil { !viewModel.isSummaryGenerating(meetingId: fixture.first.id) })
+            #expect(try fixture.summary(for: fixture.first.id)?.loadDocument().title == "After deletion")
+        }
+
+        @Test
         func backgroundPreparationFailureCreatesDismissibleJob() async throws {
             let fixture = try SummaryGenerationFixture()
             defer { fixture.removeFiles() }
@@ -478,6 +588,28 @@ import GRDB
             )
             try database.dbQueue.write { db in try session.insert(db) }
             return id
+        }
+
+        func insertMeeting(id: UUID, name: String, transcript: String) throws {
+            let createdAt = Date(timeIntervalSince1970: 1_776_384_120)
+            let meeting = MeetingRecord(
+                id: id,
+                vaultId: vault.id,
+                projectId: nil,
+                name: name,
+                createdAt: createdAt,
+                updatedAt: createdAt
+            )
+            let segment = TranscriptSegment(
+                startTime: createdAt,
+                text: transcript,
+                isConfirmed: true,
+                speakerLabel: "mic"
+            )
+            try database.dbQueue.write { db in
+                try meeting.insert(db)
+                try TranscriptSegmentRecord(from: segment, meetingId: id).insert(db)
+            }
         }
 
         func removeFiles() {
