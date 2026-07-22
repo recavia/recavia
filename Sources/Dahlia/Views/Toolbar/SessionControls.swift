@@ -52,7 +52,7 @@ struct GenerateSummaryToolbarButton: View {
     @State private var isConfirmationPresented = false
 
     private var isGeneratingCurrentMeeting: Bool {
-        viewModel.summaryGeneratingMeetingId == viewModel.currentMeetingId
+        viewModel.isSummaryGenerating
     }
 
     var body: some View {

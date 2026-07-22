@@ -814,6 +814,7 @@
 "No matching meetings" = "一致するミーティングはありません";
 "Meeting unavailable" = "利用できないミーティング";
 "Show meeting details" = "ミーティングの詳細を表示";
+"Could not generate the summary." = "要約を生成できませんでした。";
 
 /* MCP */
 "MCP" = "MCP";

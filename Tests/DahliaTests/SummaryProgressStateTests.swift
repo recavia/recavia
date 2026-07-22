@@ -19,28 +19,20 @@
         }
 
         @Test
-        func resetRestoresGoogleDocsExportToPending() {
-            let state = SummaryProgressState()
-            state.googleDocsExport = .failed("offline")
+        func generationJobsKeepMeetingProgressAndFailuresIndependent() {
+            let first = SummaryGenerationJob(meetingId: .v7(), meetingName: "Planning")
+            let second = SummaryGenerationJob(meetingId: .v7(), meetingName: "Review")
 
-            state.reset()
+            first.progress.summaryGeneration = .failed("offline")
+            first.progress.vaultExport = .skipped
+            first.progress.googleDocsExport = .skipped
+            second.progress.summaryGeneration = .running
 
-            #expect(!state.googleDocsExport.isTerminal)
-        }
-
-        @Test
-        func delayedDismissDoesNotHideNewerProgress() {
-            let state = SummaryProgressState()
-            let firstPresentationID = state.show()
-            let secondPresentationID = state.show()
-
-            state.dismiss(ifCurrent: firstPresentationID)
-
-            #expect(state.isVisible)
-
-            state.dismiss(ifCurrent: secondPresentationID)
-
-            #expect(!state.isVisible)
+            #expect(first.hasFailure)
+            #expect(first.isFinished)
+            #expect(first.failureMessages == ["offline"])
+            #expect(!second.hasFailure)
+            #expect(second.failureMessages.isEmpty)
         }
     }
 #endif

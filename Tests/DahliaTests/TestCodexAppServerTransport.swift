@@ -27,6 +27,8 @@ actor TestCodexAppServerTransport: CodexAppServerTransport {
     private var receiveContinuation: CheckedContinuation<Data?, Never>?
     private var methodWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
     private var modelListCount = 0
+    private var threadStartCount = 0
+    private var turnStartCount = 0
     private var heldRequestID: Int?
     private var closeContinuation: CheckedContinuation<Void, Never>?
     private var didStartClosing = false
@@ -50,10 +52,12 @@ actor TestCodexAppServerTransport: CodexAppServerTransport {
         resumeMethodWaiters(method)
 
         guard let requestID = object["id"]?.intValue else { return }
-        enqueueResponse(to: requestID, method: method)
+        enqueueResponse(to: requestID, method: method, request: object)
     }
 
-    private func enqueueResponse(to requestID: Int, method: String) {
+    private func enqueueResponse(to requestID: Int, method: String, request: [String: JSONValue]) {
+        if enqueueGenerationLifecycleResponse(to: requestID, method: method, request: request) { return }
+
         switch method {
         case "initialize":
             enqueueInitializeResponse(requestID: requestID)
@@ -94,17 +98,33 @@ actor TestCodexAppServerTransport: CodexAppServerTransport {
                 "origins": .object([:]),
                 "layers": .null,
             ])))
-        case "thread/start":
-            enqueue(response(id: requestID, result: .object([
-                "thread": .object(["id": .string("thread-1")]),
-            ])))
-        case "turn/start":
-            enqueueTurnStartResponse(requestID: requestID)
         case "turn/interrupt", "thread/unsubscribe":
             enqueue(response(id: requestID, result: .object([:])))
         default:
             enqueueTestResponse(to: requestID, method: method)
         }
+    }
+
+    private func enqueueGenerationLifecycleResponse(
+        to requestID: Int,
+        method: String,
+        request: [String: JSONValue]
+    ) -> Bool {
+        if method == "thread/start" {
+            threadStartCount += 1
+            enqueue(response(id: requestID, result: .object([
+                "thread": .object(["id": .string("thread-\(threadStartCount)")]),
+            ])))
+            return true
+        }
+        if method == "turn/start" {
+            enqueueTurnStartResponse(
+                requestID: requestID,
+                threadID: request["params"]?.objectValue?["threadId"]?.stringValue ?? "thread-1"
+            )
+            return true
+        }
+        return false
     }
 
     private func enqueueAccountReadResponse(requestID: Int) {
@@ -211,10 +231,12 @@ actor TestCodexAppServerTransport: CodexAppServerTransport {
         ])))
     }
 
-    private func enqueueTurnStartResponse(requestID: Int) {
+    private func enqueueTurnStartResponse(requestID: Int, threadID: String) {
+        turnStartCount += 1
+        let turnID = "turn-\(turnStartCount)"
         enqueue(response(id: requestID, result: .object([
             "turn": .object([
-                "id": .string("turn-1"),
+                "id": .string(turnID),
                 "status": .string("inProgress"),
             ]),
         ])))
@@ -226,9 +248,9 @@ actor TestCodexAppServerTransport: CodexAppServerTransport {
             enqueue(jsonValue: .object([
                 "method": .string("turn/completed"),
                 "params": .object([
-                    "threadId": .string("thread-1"),
+                    "threadId": .string(threadID),
                     "turn": .object([
-                        "id": .string("turn-1"),
+                        "id": .string(turnID),
                         "status": .string("failed"),
                         "error": .object(error),
                     ]),
@@ -240,8 +262,8 @@ actor TestCodexAppServerTransport: CodexAppServerTransport {
         enqueue(jsonValue: .object([
             "method": .string("item/completed"),
             "params": .object([
-                "threadId": .string("thread-1"),
-                "turnId": .string("turn-1"),
+                "threadId": .string(threadID),
+                "turnId": .string(turnID),
                 "item": .object([
                     "id": .string("item-1"),
                     "type": .string("agentMessage"),
@@ -252,9 +274,9 @@ actor TestCodexAppServerTransport: CodexAppServerTransport {
         enqueue(jsonValue: .object([
             "method": .string("turn/completed"),
             "params": .object([
-                "threadId": .string("thread-1"),
+                "threadId": .string(threadID),
                 "turn": .object([
-                    "id": .string("turn-1"),
+                    "id": .string(turnID),
                     "status": .string("completed"),
                     "items": .array([]),
                 ]),

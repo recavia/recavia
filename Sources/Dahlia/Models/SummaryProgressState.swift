@@ -25,6 +25,22 @@ final class SummaryProgressState {
             }
         }
 
+        var isFailed: Bool {
+            if case .failed = self {
+                true
+            } else {
+                false
+            }
+        }
+
+        var failureMessage: String? {
+            if case let .failed(message) = self {
+                message
+            } else {
+                nil
+            }
+        }
+
         var accessibilityDescription: String {
             switch self {
             case .pending: L10n.waiting
@@ -36,41 +52,15 @@ final class SummaryProgressState {
         }
     }
 
-    var isVisible = false
     var vaultExport: StepStatus = .pending
     var googleDocsExport: StepStatus = .pending
     var summaryGeneration: StepStatus = .pending
-    private var presentationID: UUID?
 
-    /// 全ステップが完了またはスキップ済みか。
+    /// 全ステップが完了・失敗・スキップのいずれかに到達したか。
     var isAllDone: Bool {
         vaultExport.isTerminal
             && googleDocsExport.isTerminal
             && summaryGeneration.isTerminal
     }
 
-    func reset() {
-        vaultExport = .pending
-        googleDocsExport = .pending
-        summaryGeneration = .pending
-    }
-
-    @discardableResult
-    func show() -> UUID {
-        let presentationID = UUID()
-        reset()
-        self.presentationID = presentationID
-        isVisible = true
-        return presentationID
-    }
-
-    func dismiss() {
-        presentationID = nil
-        isVisible = false
-    }
-
-    func dismiss(ifCurrent presentationID: UUID) {
-        guard self.presentationID == presentationID else { return }
-        dismiss()
-    }
 }

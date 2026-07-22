@@ -16,12 +16,13 @@ enum SummaryService {
         noteText: String? = nil,
         screenshots: [MeetingScreenshotRecord] = [],
         recordingSessions: [RecordingSessionTimeline] = [],
-        repository: MeetingRepository? = nil
+        repository: MeetingRepository? = nil,
+        generationSettings: SummaryGenerationSettings? = nil
     ) async throws -> GeneratedSummary {
-        let settings = AppSettings.shared
+        let generationSettings = generationSettings ?? .current()
 
         let systemPrompt = summaryGenerationInstructions(
-            settings: settings,
+            generationSettings: generationSettings,
             includesPreviousMeetings: !promptContext.previousMeetings.isEmpty
         )
         let inputs = await makeCodexInputs(.init(
@@ -38,8 +39,8 @@ enum SummaryService {
         )
 
         let responseText = try await CodexAppServerService.shared.generate(.init(
-            model: settings.codexModelID.nilIfBlank,
-            reasoningEffort: settings.codexReasoningEffort,
+            model: generationSettings.modelID,
+            reasoningEffort: generationSettings.reasoningEffort,
             developerInstructions: systemPrompt,
             inputs: inputs,
             outputSchema: SummaryDocumentResponse.outputSchema,
@@ -285,6 +286,16 @@ enum SummaryService {
         settings: AppSettings,
         includesPreviousMeetings: Bool
     ) -> String {
+        summaryGenerationInstructions(
+            generationSettings: .current(settings),
+            includesPreviousMeetings: includesPreviousMeetings
+        )
+    }
+
+    static func summaryGenerationInstructions(
+        generationSettings: SummaryGenerationSettings,
+        includesPreviousMeetings: Bool
+    ) -> String {
         // カスタム instruction は一時的に無効化し、保存済みの選択にかかわらず既定値を使う。
         var sections = [
             AppSettings.defaultSummaryPrompt,
@@ -293,8 +304,8 @@ enum SummaryService {
         if includesPreviousMeetings {
             sections.append(codexPreviousMeetingsInstruction)
         }
-        sections.append("# Detail Level\n\(settings.summaryDetailLevel.instruction)")
-        sections.append("# Language\nWrite the summary in \(settings.llmSummaryLanguage.displayName).")
+        sections.append("# Detail Level\n\(generationSettings.detailLevelInstruction)")
+        sections.append("# Language\nWrite the summary in \(generationSettings.languageDisplayName).")
         return sections.joined(separator: "\n\n") + codexStructuredInstruction
     }
 

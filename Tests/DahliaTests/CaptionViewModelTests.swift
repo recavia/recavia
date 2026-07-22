@@ -209,12 +209,24 @@ import GRDB
         }
 
         @Test
-        func canGenerateSummaryIsDisabledWhileAnotherSummaryIsGenerating() {
+        func canGenerateSummaryRemainsEnabledWhileAnotherMeetingSummaryIsGenerating() {
             let viewModel = summaryReadyViewModel()
+            let currentMeetingID = viewModel.currentMeetingId
 
             #expect(viewModel.canGenerateSummary)
 
-            viewModel.summaryGeneratingMeetingId = UUID.v7()
+            viewModel.summaryGeneratingMeetingIDs = [UUID.v7()]
+
+            #expect(viewModel.canGenerateSummary)
+            #expect(currentMeetingID != nil)
+        }
+
+        @Test
+        func canGenerateSummaryIsDisabledForTheGeneratingMeeting() throws {
+            let viewModel = summaryReadyViewModel()
+            let currentMeetingID = try #require(viewModel.currentMeetingId)
+
+            viewModel.summaryGeneratingMeetingIDs = [currentMeetingID]
 
             #expect(!viewModel.canGenerateSummary)
         }
@@ -227,7 +239,7 @@ import GRDB
             viewModel.triggerManualSummary()
 
             #expect(!viewModel.requestShowSummaryTab)
-            #expect(viewModel.summaryGeneratingMeetingId == nil)
+            #expect(viewModel.summaryGeneratingMeetingIDs.isEmpty)
         }
 
         @Test

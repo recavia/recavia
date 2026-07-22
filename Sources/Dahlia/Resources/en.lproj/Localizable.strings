@@ -814,6 +814,7 @@
 "No matching meetings" = "No matching meetings";
 "Meeting unavailable" = "Meeting unavailable";
 "Show meeting details" = "Show meeting details";
+"Could not generate the summary." = "Could not generate the summary.";
 
 /* MCP */
 "MCP" = "MCP";

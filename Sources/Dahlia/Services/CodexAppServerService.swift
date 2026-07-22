@@ -1221,6 +1221,17 @@ private extension CodexAppServerService {
             }
         }
 
+        func waitUntilActiveTurnCountForTesting(_ count: Int) async throws {
+            let clock = ContinuousClock()
+            let deadline = clock.now.advanced(by: .seconds(2))
+            while generations.values.count(where: { $0.key != nil }) < count {
+                guard clock.now < deadline else {
+                    throw CodexAppServerError.requestTimedOut("active turn test wait")
+                }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+        }
+
         func waitUntilConfigurationReloadIsWaitingForTesting() async {
             if !generationDrainWaiters.isEmpty { return }
             await withCheckedContinuation { continuation in

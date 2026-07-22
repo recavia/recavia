@@ -76,6 +76,17 @@ struct ContentView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottomTrailing)))
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            if !viewModel.summaryGenerationJobs.isEmpty {
+                SummaryProgressToastView(
+                    jobs: viewModel.summaryGenerationJobs,
+                    onDismiss: viewModel.dismissSummaryGenerationJob
+                )
+                .padding(16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeInOut(duration: 0.3), value: viewModel.summaryGenerationJobs.map(\.id))
+            }
+        }
         .sheet(item: $viewModel.pendingBatchTranscriptionConfirmation) { confirmation in
             BatchTranscriptionConfirmationView(
                 locales: viewModel.batchTranscriptionLocaleOptions(
