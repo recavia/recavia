@@ -35,6 +35,9 @@ actor MicrophoneRecognitionTestSession {
             guard await AudioCaptureManager.requestMicrophonePermission() else {
                 throw AudioCaptureError.microphonePermissionDenied
             }
+            guard await SystemAudioCaptureManager.requestPermission() else {
+                throw SystemAudioCaptureError.screenRecordingPermissionDenied
+            }
             try ensureCurrentStart(generation)
 
             let defaultDeviceID = AudioCaptureManager.defaultInputDeviceID()
@@ -90,7 +93,6 @@ actor MicrophoneRecognitionTestSession {
                     throw error
                 }
                 await stopCurrentCapture()
-                await onEvent(.failure(AudioCaptureError.echoCancellationBypassed.localizedDescription))
                 do {
                     let started = try await makeAndStartCapture(
                         path: .screenCaptureRaw,
@@ -104,6 +106,7 @@ actor MicrophoneRecognitionTestSession {
                     )
                     try ensureCurrentStart(generation)
                     attachRecognitionRuntime(service: service, bridge: bridge, onEvent: onEvent)
+                    await onEvent(.echoCancellationBypassed)
                     return makeStartInfo(
                         started.startInfo,
                         path: .screenCaptureRaw,
@@ -192,7 +195,6 @@ actor MicrophoneRecognitionTestSession {
             manager?.disableSystemAudioCapture()
             Task { @MainActor in
                 onEvent(.echoCancellationBypassed)
-                onEvent(.failure(AudioCaptureError.echoCancellationBypassed.localizedDescription))
             }
         }
         bufferPipeline = pipeline

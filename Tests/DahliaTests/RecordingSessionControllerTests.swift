@@ -692,7 +692,7 @@
             self.warningStore = warningStore
         }
 
-        func requestPermission(for _: RecordingAudioSource) async -> Bool { true }
+        func requestPermission(for _: RecordingAudioSource) async throws {}
 
         func makeSession(
             for pipeline: AudioSourcePipeline,

@@ -85,6 +85,7 @@ import os
                 usesEchoCancellation: true
             )
             let output = OSAllocatedUnfairLock(initialState: OutputObservation())
+            let processedFrameCount = OSAllocatedUnfairLock(initialState: 0)
             processor.onOutputBuffer = { buffer in
                 let identity = ObjectIdentifier(buffer)
                 let frameCount = Int(buffer.frameLength)
@@ -92,6 +93,9 @@ import os
                     $0.identities.append(identity)
                     $0.frameCount += frameCount
                 }
+            }
+            processor.onProcessedBuffer = { buffer in
+                processedFrameCount.withLock { $0 += Int(buffer.frameLength) }
             }
             let first = try makeBuffer(format: format, frameCount: 160)
             let second = try makeBuffer(format: format, frameCount: 160)
@@ -101,6 +105,7 @@ import os
             try processor.finish()
 
             #expect(output.withLock { $0.frameCount } == 320)
+            #expect(processedFrameCount.withLock { $0 } == 0)
         }
 
         @Test
@@ -113,6 +118,7 @@ import os
                 makeEchoCancellationProcessor: { fake }
             )
             let observedSamples = OSAllocatedUnfairLock(initialState: [Float]())
+            let processedSamples = OSAllocatedUnfairLock(initialState: [Float]())
             processor.onOutputBuffer = { buffer in
                 guard let samples = buffer.floatChannelData?[0] else { return }
                 let copiedSamples = Array(UnsafeBufferPointer(
@@ -120,6 +126,16 @@ import os
                     count: Int(buffer.frameLength)
                 ))
                 observedSamples.withLock {
+                    $0.append(contentsOf: copiedSamples)
+                }
+            }
+            processor.onProcessedBuffer = { buffer in
+                guard let samples = buffer.floatChannelData?[0] else { return }
+                let copiedSamples = Array(UnsafeBufferPointer(
+                    start: samples,
+                    count: Int(buffer.frameLength)
+                ))
+                processedSamples.withLock {
                     $0.append(contentsOf: copiedSamples)
                 }
             }
@@ -142,6 +158,10 @@ import os
             #expect(samples[0 ..< 100].allSatisfy { $0 == 0.1 })
             #expect(samples[100 ..< 200].allSatisfy { $0 == 0.2 })
             #expect(samples[200 ..< 300].allSatisfy { $0 == 0.3 })
+            let processed = processedSamples.withLock { $0 }
+            #expect(processed.count == 200)
+            #expect(processed[0 ..< 100].allSatisfy { $0 == 0.1 })
+            #expect(processed[100 ..< 200].allSatisfy { $0 == 0.3 })
         }
 
         @Test
@@ -181,7 +201,7 @@ import os
             #expect(output.withLock { $0.identities.count } == 2)
             #expect(output.withLock { $0.identities.first } == ObjectIdentifier(capture))
             #expect(output.withLock { $0.frameCount } == 320)
-            #expect(processedFrameCount.withLock { $0 } == 320)
+            #expect(processedFrameCount.withLock { $0 } == 160)
             #expect(bypassCount.withLock { $0 } == 1)
         }
 

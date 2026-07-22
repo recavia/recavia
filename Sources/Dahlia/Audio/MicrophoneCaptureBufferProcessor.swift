@@ -87,7 +87,7 @@ final class MicrophoneCaptureBufferProcessor: @unchecked Sendable {
         onRawBuffer?(audio.buffer)
 
         guard usesEchoCancellation, !isEchoCancellationBypassed else {
-            deliverOrFail(audio.buffer, isProcessed: usesEchoCancellation)
+            deliverOrFail(audio.buffer, isProcessed: false)
             return
         }
 
@@ -163,7 +163,7 @@ final class MicrophoneCaptureBufferProcessor: @unchecked Sendable {
                 try processEchoCancellationCapture(audio)
             } else {
                 try flushEchoCancellationRemainder()
-                try deliver(audio.buffer, isProcessed: true)
+                try deliver(audio.buffer, isProcessed: false)
             }
         }
     }
@@ -206,7 +206,7 @@ final class MicrophoneCaptureBufferProcessor: @unchecked Sendable {
         pendingCaptures.removeAll(keepingCapacity: false)
         for audio in captures {
             guard !didFail else { return }
-            deliverOrFail(audio.buffer, isProcessed: true)
+            deliverOrFail(audio.buffer, isProcessed: false)
         }
     }
 

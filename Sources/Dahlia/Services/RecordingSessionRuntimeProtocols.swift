@@ -15,7 +15,7 @@ protocol AudioCaptureSession: Sendable {
 
 /// 実デバイス capture とテスト用 fake を差し替えるための生成境界。
 protocol AudioCaptureSessionFactory: Sendable {
-    func requestPermission(for source: RecordingAudioSource) async -> Bool
+    func requestPermission(for source: RecordingAudioSource) async throws
 
     func makeSession(
         for pipeline: AudioSourcePipeline,

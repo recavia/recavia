@@ -75,9 +75,7 @@ extension RecordingSessionController {
         translateSegment: ProgressiveSegmentTranslationHandler?
     ) async throws -> SourcePipelinePreparation {
         let source = configuration.source
-        guard await captureFactory.requestPermission(for: source) else {
-            throw Self.permissionError(for: source)
-        }
+        try await captureFactory.requestPermission(for: source)
         let batchFormat = batchRecording?.targetFormat
         let preparedRecognition = try await prepareRecognitionForNewPipeline(
             source: source,

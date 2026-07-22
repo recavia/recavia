@@ -166,9 +166,7 @@ actor RecordingSessionController {
         var preparedRecognitions: [PreparedProgressiveRecognitionSession] = []
         do {
             for configuration in configurations {
-                guard await captureFactory.requestPermission(for: configuration.source) else {
-                    throw Self.permissionError(for: configuration.source)
-                }
+                try await captureFactory.requestPermission(for: configuration.source)
             }
 
             var recognitionModelIsAvailable = request.plan.requiresLiveRecognition
@@ -456,14 +454,5 @@ actor RecordingSessionController {
 
     static func sortedSources(_ sources: some Sequence<RecordingAudioSource>) -> [RecordingAudioSource] {
         sources.sorted { $0.rawValue < $1.rawValue }
-    }
-
-    static func permissionError(for source: RecordingAudioSource) -> Error {
-        switch source {
-        case .microphone:
-            AudioCaptureError.microphonePermissionDenied
-        case .system:
-            SystemAudioCaptureError.screenRecordingPermissionDenied
-        }
     }
 }
