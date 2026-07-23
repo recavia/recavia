@@ -25,7 +25,7 @@ import GRDB
             await coordinator.enqueue(sessionId: fixture.session.id)
             try await waitUntil { await stateProbe.didComplete }
 
-            #expect(await stateProbe.reportedProgress() == expectedProgress(totalFileCount: 2))
+            expectCompleteProgress(await stateProbe.reportedProgress(), totalFileCount: 2)
         }
 
         @Test
@@ -44,7 +44,7 @@ import GRDB
             await coordinator.enqueue(sessionId: fixture.session.id)
             try await waitUntil { await stateProbe.didComplete }
 
-            #expect(await stateProbe.reportedProgress() == expectedProgress(totalFileCount: 2))
+            expectCompleteProgress(await stateProbe.reportedProgress(), totalFileCount: 2)
         }
 
         @Test
@@ -85,6 +85,7 @@ import GRDB
 
             await stateProbe.releaseProgressCallback()
             try await waitUntil { await stateProbe.didComplete }
+            expectCompleteProgress(await stateProbe.reportedProgress(), totalFileCount: fileCount)
         }
 
         private func makeFixture(name: String, duration: TimeInterval) throws -> BatchAudioTestFixture {
@@ -245,10 +246,20 @@ import GRDB
             return buffer
         }
 
-        private func expectedProgress(totalFileCount: Int) -> [BatchTranscriptionProgress] {
-            (0 ... totalFileCount).map {
-                BatchTranscriptionProgress(completedFileCount: $0, totalFileCount: totalFileCount)
-            }
+        private func expectCompleteProgress(
+            _ progressUpdates: [BatchTranscriptionProgress],
+            totalFileCount: Int
+        ) {
+            #expect(progressUpdates.first == BatchTranscriptionProgress(
+                completedFileCount: 0,
+                totalFileCount: totalFileCount
+            ))
+            #expect(progressUpdates.last == BatchTranscriptionProgress(
+                completedFileCount: totalFileCount,
+                totalFileCount: totalFileCount
+            ))
+            #expect(progressUpdates.allSatisfy { $0.totalFileCount == totalFileCount })
+            #expect(progressUpdates.map(\.completedFileCount) == progressUpdates.map(\.completedFileCount).sorted())
         }
 
         private func waitUntil(
@@ -299,13 +310,15 @@ import GRDB
         private(set) var isHoldingProgressCallback = false
         private(set) var didComplete = false
         private var hasHeldProgressCallback = false
+        private var progressUpdates: [BatchTranscriptionProgress] = []
 
         func record(_ state: BatchTranscriptionState) async {
             if case .completed = state {
                 didComplete = true
             }
-            guard case let .running(_, progress?) = state,
-                  progress.completedFileCount == 1,
+            guard case let .running(_, progress?) = state else { return }
+            progressUpdates.append(progress)
+            guard progress.completedFileCount > 0,
                   !hasHeldProgressCallback else { return }
             hasHeldProgressCallback = true
             isHoldingProgressCallback = true
@@ -318,6 +331,10 @@ import GRDB
         func releaseProgressCallback() {
             progressContinuation?.resume()
             progressContinuation = nil
+        }
+
+        func reportedProgress() -> [BatchTranscriptionProgress] {
+            progressUpdates
         }
     }
 

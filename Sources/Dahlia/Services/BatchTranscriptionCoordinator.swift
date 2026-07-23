@@ -75,6 +75,7 @@ actor BatchTranscriptionCoordinator {
     private var runningSessionId: UUID?
     private var runningProgress: BatchTranscriptionProgress?
     private var processorTask: Task<Void, Never>?
+    private var pendingProgressUpdate: BatchTranscriptionUpdate?
     private var progressNotificationTask: Task<Void, Never>?
 
     init(
@@ -620,16 +621,23 @@ extension BatchTranscriptionCoordinator {
             meetingId: meetingId,
             state: .running(sessionId: sessionId, progress: progress)
         )
-        let precedingTask = progressNotificationTask
-        progressNotificationTask = Task { [onStateChange] in
-            await precedingTask?.value
+        pendingProgressUpdate = update
+        guard progressNotificationTask == nil else { return }
+        progressNotificationTask = Task { [weak self] in
+            await self?.deliverPendingProgressUpdates()
+        }
+    }
+
+    private func deliverPendingProgressUpdates() async {
+        while let update = pendingProgressUpdate {
+            pendingProgressUpdate = nil
             await onStateChange(update)
         }
+        progressNotificationTask = nil
     }
 
     private func finishProgressNotifications() async {
         await progressNotificationTask?.value
-        progressNotificationTask = nil
     }
 
     private func notifyProgress(
