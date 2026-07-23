@@ -129,6 +129,7 @@ embed_whisperkit_licenses() {
     mkdir -p "$destination_dir"
     cp "${checkout_dir}/LICENSE" "${destination_dir}/LICENSE"
     cp "${checkout_dir}/NOTICES" "${destination_dir}/NOTICES"
+    chmod u+w "${destination_dir}/LICENSE" "${destination_dir}/NOTICES"
 }
 
 has_entitlements() {

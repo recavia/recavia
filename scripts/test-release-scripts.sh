@@ -327,10 +327,15 @@ test_whisperkit_license_embedding_validation() {
     mkdir -p "$checkout_dir"
     printf '%s' 'license fixture' > "${checkout_dir}/LICENSE"
     printf '%s' 'notices fixture' > "${checkout_dir}/NOTICES"
+    chmod a-w "${checkout_dir}/LICENSE" "${checkout_dir}/NOTICES"
 
     embed_whisperkit_licenses "$fake_project" "$contents_dir"
     cmp "${checkout_dir}/LICENSE" "${contents_dir}/Resources/Licenses/WhisperKit/LICENSE"
     cmp "${checkout_dir}/NOTICES" "${contents_dir}/Resources/Licenses/WhisperKit/NOTICES"
+    [ -w "${contents_dir}/Resources/Licenses/WhisperKit/LICENSE" ] \
+        || fail "embedded WhisperKit license was not writable"
+    [ -w "${contents_dir}/Resources/Licenses/WhisperKit/NOTICES" ] \
+        || fail "embedded WhisperKit notices were not writable"
 
     rm "${checkout_dir}/NOTICES"
     expect_failure embed_whisperkit_licenses "$fake_project" "$contents_dir"
